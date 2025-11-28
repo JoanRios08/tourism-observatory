@@ -1,0 +1,140 @@
+{
+  "users": [
+    {
+      "id": "1",
+      "cedula": "V-12345678",
+      "nombre": "María",
+      "apellido": "López",
+      "fullName": "María López",
+      "rol": "Administrador",
+      "email": "maria@example.com",
+      "password": "admin123",
+      "avatar": "/assets/images/avatars/1.jpg",
+      "createdAt": "2025-10-01",
+      "updatedAt": "2025-11-02"
+    },
+    {
+      "id": "2",
+      "cedula": "V-87654321",
+      "nombre": "Carlos",
+      "apellido": "Ruiz",
+      "fullName": "Carlos Ruiz",
+      "rol": "Coordinador",
+      "email": "carlos@example.com",
+      "password": "carlos123",
+      "avatar": "/assets/images/avatars/2.jpg",
+      "createdAt": "2025-09-12",
+      "updatedAt": "2025-10-20"
+    },
+    {
+      "id": "3",
+      "cedula": "E-11223344",
+      "nombre": "Ana",
+      "apellido": "Gómez",
+      "fullName": "Ana Gómez",
+      "rol": "Profesor",
+      "email": "ana@example.com",
+      "password": "ana123",
+      "avatar": "/assets/images/avatars/3.jpg",
+      "createdAt": "2025-11-05",
+      "updatedAt": "2025-11-06"
+    }
+  ],
+  "projects": [
+    {
+      "id": "P-1001",
+      "title": "Mapa de Alojamientos",
+      "userId": 1,
+      "userName": "María López",
+      "category": "Infraestructura",
+      "createdAt": "2025-11-01",
+      "updatedAt": "2025-11-05"
+    },
+    {
+      "id": "P-1002",
+      "title": "Estadísticas Visitantes 2024",
+      "userId": 2,
+      "userName": "Carlos Ruiz",
+      "category": "Investigación",
+      "createdAt": "2025-10-24",
+      "updatedAt": "2025-10-30"
+    },
+    {
+      "id": "P-1003",
+      "title": "Rutas de Senderismo",
+      "userId": 3,
+      "userName": "Ana Gómez",
+      "category": "Turismo",
+      "createdAt": "2025-09-12",
+      "updatedAt": "2025-11-12"
+    }
+  ],
+  "documents": [
+    {
+      "id": "D-2001",
+      "projectId": "P-1001",
+      "title": "Informe de Visitantes",
+      "userId": 1,
+      "userName": "María López",
+      "category": "Investigación",
+      "description": "Informe anual sobre visitantes y procedencia.",
+      "fileName": "informe_visitantes_2024.pdf",
+      "fileUrl": "/uploads/informe_visitantes_2024.pdf",
+      "approved": false,
+      "createdAt": "2025-11-20",
+      "updatedAt": "2025-11-20"
+    },
+    {
+      "id": "D-2002",
+      "projectId": "P-1002",
+      "title": "Guía de Alojamientos",
+      "userId": 2,
+      "userName": "Carlos Ruiz",
+      "category": "Guías",
+      "description": "Documento técnico con clasificación de alojamientos.",
+      "fileName": "guia_alojamientos.pdf",
+      "fileUrl": "/uploads/guia_alojamientos.pdf",
+      "approved": true,
+      "createdAt": "2025-11-18",
+      "updatedAt": "2025-11-18"
+    }
+  ],
+  "posts": [
+    {
+      "id": "1",
+      "userId": 1,
+      "userName": "María López",
+      "title": "Lanzamiento del Observatorio",
+      "category": "Noticias",
+      "createdAt": "2025-10-01",
+      "updatedAt": "2025-10-05",
+      "approved": true
+    },
+    {
+      "id": "2",
+      "userId": 2,
+      "userName": "Carlos Ruiz",
+      "title": "Charla sobre turismo sostenible",
+      "category": "Eventos",
+      "createdAt": "2025-11-02",
+      "updatedAt": "2025-11-03",
+      "approved": false
+    }
+  ],
+  "auth": [
+    {
+      "id": "1",
+      "username": "admin",
+      "password": "admin123",
+      "userId": 1,
+      "token": "demo-token-abc123"
+    },
+    {
+      "id": "2",
+      "username": "carlos",
+      "password": "carlos123",
+      "userId": 2,
+      "token": "demo-token-carlos456"
+    }
+  ]
+}

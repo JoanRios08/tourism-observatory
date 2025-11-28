@@ -1,17 +1,18 @@
 import React, { Suspense, useEffect } from 'react'
+import auth from './utils/auth'
 import { HashRouter, Route, Routes, Navigate } from 'react-router-dom'
 import { useSelector } from 'react-redux'
 
 import { CSpinner, useColorModes } from '@coreui/react'
 import './scss/style.scss'
 
-// We use those styles to show code examples, you should remove them in your application.
+
 import './scss/examples.scss'
 
-// Containers
+
 const DefaultLayout = React.lazy(() => import('./layout/DefaultLayout'))
 
-// Pages
+
 const Login = React.lazy(() => import('./views/pages/login/Login'))
 const Register = React.lazy(() => import('./views/pages/register/Register'))
 const Page404 = React.lazy(() => import('./views/pages/page404/Page404'))
@@ -33,7 +34,7 @@ const App = () => {
     }
 
     setColorMode(storedTheme)
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  }, []) 
 
   return (
     <HashRouter>
@@ -49,13 +50,36 @@ const App = () => {
           <Route exact path="/register" name="Register Page" element={<Register />} />
           <Route exact path="/404" name="Page 404" element={<Page404 />} />
           <Route exact path="/500" name="Page 500" element={<Page500 />} />
-          {/* Root redirects to login so login is the first page shown */}
+          
           <Route path="/" element={<Navigate to="/login" replace />} />
-          <Route path="*" name="Home" element={<DefaultLayout />} />
+          
+          <Route
+            path="*"
+            name="Home"
+            element={<ProtectedLayout />}
+          />
         </Routes>
       </Suspense>
     </HashRouter>
   )
+}
+
+
+function ProtectedLayout() {
+  try {
+    
+    try {
+      
+      console.debug('[ProtectedLayout] token:', auth.getToken())
+      
+      console.debug('[ProtectedLayout] isAuthenticated():', auth.isAuthenticated())
+      
+      console.debug('[ProtectedLayout] location:', window.location.href, window.location.hash)
+    } catch (e) {}
+    return auth.isAuthenticated() ? <DefaultLayout /> : <Navigate to="/login" replace />
+  } catch (err) {
+    return <Navigate to="/login" replace />
+  }
 }
 
 export default App

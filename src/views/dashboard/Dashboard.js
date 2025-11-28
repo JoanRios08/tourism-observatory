@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useEffect, useState } from 'react'
 import {
   CRow,
   CCol,
@@ -19,51 +19,97 @@ import {
 import { CChartDoughnut, CChartBar } from '@coreui/react-chartjs'
 
 const Dashboard = () => {
-  // data
-  const donutData = {
-    labels: ['Turismo', 'Cultura', 'Gastronomía', 'Naturaleza'],
-    datasets: [
-      {
-        data: [45, 25, 15, 15],
-        backgroundColor: ['#3e8ef7', '#7c3aed', '#ffb020', '#06b6d4'],
-        hoverBackgroundColor: ['#2f6fe0', '#6a2bd6', '#e6a200', '#05a0b0'],
-      },
-    ],
+  const [projects, setProjects] = useState([])
+  const [documents, setDocuments] = useState([])
+  const [users, setUsers] = useState([])
+  const [loading, setLoading] = useState(false)
+
+  const base = window.__API_BASE__ || 'http://localhost:3001'
+
+  useEffect(() => {
+    const fetchAll = async () => {
+      setLoading(true)
+      try {
+        const [pRes, dRes, uRes] = await Promise.all([
+          fetch(`${base}/projects?_sort=createdAt&_order=desc`),
+          fetch(`${base}/documents?_sort=createdAt&_order=desc`),
+          fetch(`${base}/users?_sort=createdAt&_order=desc`),
+        ])
+        const [pData, dData, uData] = await Promise.all([pRes.json(), dRes.json(), uRes.json()])
+        setProjects(pData)
+        setDocuments(dData)
+        setUsers(uData)
+      } catch (err) {
+        
+      } finally {
+        setLoading(false)
+      }
+    }
+    fetchAll()
+  }, [])
+
+  
+  const monthsEsp = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic']
+
+  const getLastNMonths = (n = 6) => {
+    const result = []
+    const now = new Date()
+    for (let i = n - 1; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1)
+      result.push({ month: d.getMonth(), year: d.getFullYear(), label: monthsEsp[d.getMonth()] })
+    }
+    return result
   }
+
+  const last6 = getLastNMonths(6)
+
+  const barCounts = last6.map((m) => projects.filter((p) => {
+    if (!p.createdAt) return false
+    const d = new Date(p.createdAt)
+    return d.getMonth() === m.month && d.getFullYear() === m.year
+  }).length)
 
   const barData = {
-    labels: ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun'],
+    labels: last6.map((m) => m.label),
     datasets: [
       {
-        label: 'Visitas por mes',
+        label: 'Proyectos por mes',
         backgroundColor: '#3e8ef7',
-        data: [120, 190, 300, 250, 320, 400],
+        data: barCounts,
       },
     ],
   }
 
-  // Mock tables
-  const latestProjects = [
-    { id: 'P-1001', name: 'Mapa de Alojamientos', owner: 'María Lopez', date: '2025-11-01', status: 'Publicado' },
-    { id: 'P-1002', name: 'Estadísticas Visitantes 2024', owner: 'Carlos Ruiz', date: '2025-10-24', status: 'Borrador' },
-    { id: 'P-1003', name: 'Rutas de Senderismo', owner: 'Ana Gómez', date: '2025-09-12', status: 'Publicado' },
-  ]
+  const categoryCounts = projects.reduce((acc, p) => {
+    const cat = p.category || 'Sin categoría'
+    acc[cat] = (acc[cat] || 0) + 1
+    return acc
+  }, {})
 
-  const latestDocuments = [
-    { id: 'D-3001', title: 'Informe Anual 2024', type: 'PDF', project: 'Estadísticas Visitantes', date: '2025-11-05' },
-    { id: 'D-3002', title: 'Manual de Usuario', type: 'DOCX', project: 'Mapa de Alojamientos', date: '2025-10-30' },
-    { id: 'D-3003', title: 'Licencias', type: 'PDF', project: 'Rutas de Senderismo', date: '2025-10-01' },
-  ]
+  const donutData = {
+    labels: Object.keys(categoryCounts),
+    datasets: [
+      {
+        data: Object.values(categoryCounts),
+        backgroundColor: ['#3e8ef7', '#7c3aed', '#ffb020', '#06b6d4', '#f97316', '#10b981'],
+        hoverBackgroundColor: ['#2f6fe0', '#6a2bd6', '#e6a200', '#05a0b0', '#c85a08', '#0e9b6f'],
+      },
+    ],
+  }
 
-  const latestUsers = [
-    { id: 'U-5001', name: 'Lucía Fernández', email: 'lucia@example.com', role: 'Editor', date: '2025-11-08' },
-    { id: 'U-5002', name: 'Miguel Torres', email: 'miguel@example.com', role: 'Administrador', date: '2025-11-02' },
-    { id: 'U-5003', name: 'Sofía Ramos', email: 'sofia@example.com', role: 'Viewer', date: '2025-10-28' },
-  ]
+  const latestProjects = projects.slice(0, 3).map((p) => ({ id: p.id, name: p.title, owner: p.userName || '', date: p.createdAt, status: p.status || 'Publicado' }))
+
+  const latestDocuments = documents.slice(0, 3).map((d) => {
+    const project = projects.find((pr) => pr.id === d.projectId)
+    const type = d.fileName ? d.fileName.split('.').pop().toUpperCase() : 'FILE'
+    return { id: d.id, title: d.title, type, project: project ? project.title : d.projectId, date: d.createdAt }
+  })
+
+  const latestUsers = users.slice(0, 3).map((u) => ({ id: u.id, name: u.fullName || `${u.nombre} ${u.apellido}`, email: u.email, role: u.rol || 'Usuario', date: u.createdAt }))
 
   return (
     <>
-      {/* Quick-actions carousel: 3 taps (aesthetic with captions & controls) */}
+      
       <CCard className="mb-4">
         <CCardBody className="p-0">
           <CCarousel controls indicators>
@@ -94,7 +140,7 @@ const Dashboard = () => {
           </CCarousel>
         </CCardBody>
       </CCard>
-      {/* Carousel with donut + bar charts */}
+     
       <CCard className="mb-4">
         <CCardHeader>Resumen rápido</CCardHeader>
         <CCardBody>
@@ -131,7 +177,7 @@ const Dashboard = () => {
         </CCardBody>
       </CCard>
 
-      {/* Latest Projects */}
+      
       <CCard className="mb-4">
         <CCardHeader>Últimos proyectos subidos</CCardHeader>
         <CCardBody>
@@ -160,7 +206,7 @@ const Dashboard = () => {
         </CCardBody>
       </CCard>
 
-      {/* Latest Documents */}
+      
       <CCard className="mb-4">
         <CCardHeader>Últimos documentos agregados</CCardHeader>
         <CCardBody>
@@ -189,7 +235,7 @@ const Dashboard = () => {
         </CCardBody>
       </CCard>
 
-      {/* Latest Users */}
+      
       <CCard className="mb-4">
         <CCardHeader>Últimos usuarios registrados</CCardHeader>
         <CCardBody>

@@ -28,23 +28,29 @@ import CIcon from '@coreui/icons-react'
 import { cilPencil, cilTrash, cilCheck } from '@coreui/icons'
 
 const Post = () => {
-	// sample users and categories (could be fetched from API)
-	const usersList = ['María López', 'Carlos Ruiz', 'Ana Gómez']
-	const categories = ['Noticias', 'Eventos', 'Anuncios']
-
-	const initialPosts = [
-		{ id: 1, user: 'María López', title: 'Lanzamiento del Observatorio', category: 'Noticias', createdAt: '2025-10-01', updatedAt: '2025-10-05', approved: true },
-		{ id: 2, user: 'Carlos Ruiz', title: 'Charla sobre turismo sostenible', category: 'Eventos', createdAt: '2025-11-02', updatedAt: '2025-11-03', approved: false },
-		{ id: 3, user: 'Ana Gómez', title: 'Actualización de proyectos', category: 'Anuncios', createdAt: '2025-11-10', updatedAt: '2025-11-11', approved: false },
-	]
-
-	const [posts, setPosts] = useState(initialPosts)
+	
+	const [usersList, setUsersList] = useState([])
+	const [categories, setCategories] = useState(['Noticias', 'Eventos', 'Anuncios'])
+	const [posts, setPosts] = useState([])
 	const [titleFilter, setTitleFilter] = useState('')
 	const [userFilter, setUserFilter] = useState('')
 	const [categoryFilter, setCategoryFilter] = useState('')
 
 	const [showCreate, setShowCreate] = useState(false)
-	const [createForm, setCreateForm] = useState({ user: usersList[0], title: '', category: categories[0] })
+	const [createForm, setCreateForm] = useState({ user: '', title: '', category: '' })
+
+	const base = window.__API_BASE__ || 'http://localhost:3001'
+
+	React.useEffect(() => {
+		fetch(`${base}/posts?_sort=createdAt&_order=desc`)
+			.then((r) => r.json())
+			.then(setPosts)
+			.catch(() => setPosts([]))
+		fetch(`${base}/users`)
+			.then((r) => r.json())
+			.then((data) => setUsersList(data.map((u) => u.fullName || `${u.nombre} ${u.apellido}`)))
+			.catch(() => setUsersList([]))
+	}, [])
 
 	const filtered = useMemo(() => {
 		return posts.filter((p) => {
@@ -62,18 +68,21 @@ const Post = () => {
 			alert('El título es obligatorio')
 			return
 		}
-		const nextId = posts.length ? Math.max(...posts.map((p) => p.id)) + 1 : 1
 		const now = new Date().toISOString().slice(0, 10)
-		const newPost = { id: nextId, user: createForm.user, title: createForm.title, category: createForm.category, createdAt: now, updatedAt: now, approved: false }
-		setPosts([newPost, ...posts])
+		const newPost = { userName: createForm.user, title: createForm.title, category: createForm.category, createdAt: now, updatedAt: now, approved: false }
+		fetch(`${base}/posts`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(newPost) })
+			.then((r) => r.json())
+			.then(() => fetch(`${base}/posts?_sort=createdAt&_order=desc`).then((r) => r.json()).then(setPosts))
+			.catch(() => alert('Error creando publicación'))
 		setShowCreate(false)
-		setCreateForm({ user: usersList[0], title: '', category: categories[0] })
+		setCreateForm({ user: usersList[0] || '', title: '', category: categories[0] })
 	}
 
 	const handleDelete = (post) => {
-		if (window.confirm(`¿Eliminar publicación "${post.title}"?`)) {
-			setPosts(posts.filter((p) => p.id !== post.id))
-		}
+		if (!window.confirm(`¿Eliminar publicación "${post.title}"?`)) return
+		fetch(`${base}/posts/${post.id}`, { method: 'DELETE' })
+			.then(() => setPosts((prev) => prev.filter((p) => p.id !== post.id)))
+			.catch(() => alert('Error eliminando'))
 	}
 
 	const handleEdit = (post) => {
@@ -81,7 +90,10 @@ const Post = () => {
 	}
 
 	const handleApprove = (post) => {
-		setPosts(posts.map((p) => (p.id === post.id ? { ...p, approved: true, updatedAt: new Date().toISOString().slice(0, 10) } : p)))
+		fetch(`${base}/posts/${post.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ approved: true, updatedAt: new Date().toISOString().slice(0, 10) }) })
+			.then((r) => r.json())
+			.then((updated) => setPosts((prev) => prev.map((p) => (p.id === updated.id ? updated : p))))
+			.catch(() => alert('Error aprobando'))
 	}
 
 	return (
@@ -174,7 +186,7 @@ const Post = () => {
 				</CCol>
 			</CRow>
 
-			{/* Create modal */}
+			
 			<CModal visible={showCreate} onClose={() => setShowCreate(false)}>
 				<CModalHeader>
 					<CModalTitle>Crear publicación</CModalTitle>

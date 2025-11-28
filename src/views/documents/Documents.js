@@ -31,28 +31,38 @@ import CIcon from '@coreui/icons-react'
 import { cilPencil, cilTrash, cilCheck } from '@coreui/icons'
 
 const Documents = () => {
-  const usersList = ['María López', 'Carlos Ruiz', 'Ana Gómez']
-  const initial = [
-    { id: 'D-2001', user: 'María López', title: 'Informe de Visitantes', category: 'Investigación', createdAt: '2025-11-20', updatedAt: '2025-11-20', approved: false },
-    { id: 'D-2002', user: 'Carlos Ruiz', title: 'Guía de Alojamientos', category: 'Guías', createdAt: '2025-11-18', updatedAt: '2025-11-18', approved: true },
-  ]
-
-  const [documents, setDocuments] = useState(initial)
+  const [documents, setDocuments] = useState([])
   const [titleFilter, setTitleFilter] = useState('')
   const [userFilter, setUserFilter] = useState('')
   const [dateFilter, setDateFilter] = useState('')
-
+  const [usersList, setUsersList] = useState([])
+  const [projectsList, setProjectsList] = useState([])
   const [showCreate, setShowCreate] = useState(false)
   const [editing, setEditing] = useState(null)
-  const [form, setForm] = useState({ title: '', description: '', category: '', file: null, user: usersList[0] })
+  const [form, setForm] = useState({ title: '', description: '', category: '', file: null, user: '', projectId: '' })
 
   const lastDocument = documents.length ? documents[0] : null
 
-  // simple weekly count mock: count created in November week (for demo)
-  const documentsThisWeek = documents.filter((d) => {
-    // naive: dates in 2025-11-xx considered this week for demo
-    return d.createdAt && d.createdAt.startsWith('2025-11')
-  }).length
+  
+  const documentsThisWeek = documents.filter((d) => d.createdAt && d.createdAt.startsWith('2025-11')).length
+
+  const base = window.__API_BASE__ || 'http://localhost:3001'
+
+  
+  React.useEffect(() => {
+    fetch(`${base}/documents?_sort=createdAt&_order=desc`)
+      .then((r) => r.json())
+      .then(setDocuments)
+      .catch(() => setDocuments([]))
+    fetch(`${base}/users`)
+      .then((r) => r.json())
+      .then((data) => setUsersList(data.map((u) => u.fullName || `${u.nombre} ${u.apellido}`)))
+      .catch(() => setUsersList([]))
+    fetch(`${base}/projects`)
+      .then((r) => r.json())
+      .then(setProjectsList)
+      .catch(() => setProjectsList([]))
+  }, [])
 
   const filtered = useMemo(() => {
     return documents.filter((d) => {
@@ -65,7 +75,7 @@ const Documents = () => {
 
   const openCreate = () => {
     setEditing(null)
-    setForm({ title: '', description: '', category: '', file: null, user: usersList[0] })
+    setForm({ title: '', description: '', category: '', file: null, user: usersList[0] || '', projectId: projectsList[0]?.id || '' })
     setShowCreate(true)
   }
 
@@ -81,19 +91,34 @@ const Documents = () => {
       return
     }
     if (editing) {
-      const updated = { ...editing, title: form.title, description: form.description, category: form.category, updatedAt: new Date().toISOString().slice(0, 10) }
-      setDocuments(documents.map((d) => (d.id === editing.id ? updated : d)))
+      const updated = { ...editing, title: form.title, description: form.description, category: form.category, projectId: form.projectId, userName: form.user, updatedAt: new Date().toISOString().slice(0, 10) }
+      fetch(`${base}/documents/${editing.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
+        .then((r) => r.json())
+        .then(() => fetch(`${base}/documents?_sort=createdAt&_order=desc`).then((r) => r.json()).then(setDocuments))
+        .catch((e) => alert('Error actualizando documento'))
     } else {
-      const id = `D-${Math.floor(2000 + Math.random() * 8000)}`
       const now = new Date().toISOString().slice(0, 10)
-      const newDoc = { id, user: form.user, title: form.title, category: form.category || 'General', createdAt: now, updatedAt: now, approved: false, description: form.description }
-      setDocuments([newDoc, ...documents])
+      const newDoc = { projectId: form.projectId || null, title: form.title, userName: form.user, userId: null, category: form.category || 'General', description: form.description || '', fileName: form.file?.name || '', fileUrl: '', approved: false, createdAt: now, updatedAt: now }
+      fetch(`${base}/documents`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(newDoc) })
+        .then((r) => r.json())
+        .then(() => fetch(`${base}/documents?_sort=createdAt&_order=desc`).then((r) => r.json()).then(setDocuments))
+        .catch(() => alert('Error creando documento'))
     }
     setShowCreate(false)
   }
 
-  const remove = (d) => setDocuments(documents.filter((x) => x.id !== d.id))
-  const approve = (d) => setDocuments(documents.map((x) => (x.id === d.id ? { ...x, approved: !x.approved } : x)))
+  const remove = (d) => {
+    if (!window.confirm(`Eliminar documento ${d.title}?`)) return
+    fetch(`${base}/documents/${d.id}`, { method: 'DELETE' })
+      .then(() => setDocuments((prev) => prev.filter((x) => x.id !== d.id)))
+      .catch(() => alert('Error eliminando'))
+  }
+  const approve = (d) => {
+    fetch(`${base}/documents/${d.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ approved: !d.approved }) })
+      .then((r) => r.json())
+      .then((updated) => setDocuments((prev) => prev.map((x) => (x.id === updated.id ? updated : x))))
+      .catch(() => alert('Error actualizando estado'))
+  }
 
   return (
     <>
@@ -106,18 +131,18 @@ const Documents = () => {
                   <div className="d-flex w-100 align-items-center justify-content-center" style={{ minHeight: 160 }}>
                     <div style={{ textAlign: 'center' }}>
                       <h5 className="mb-1">Último documento subido</h5>
-                      <div style={{ fontWeight: 700 }}>{lastDocument ? lastDocument.title : 'Sin documentos'}</div>
-                      {lastDocument && <div className="text-muted small">Subido por {lastDocument.user} • {lastDocument.createdAt}</div>}
+                          <div style={{ fontWeight: 700 }}>{lastDocument ? lastDocument.title : 'Sin documentos'}</div>
+                          {lastDocument && <div className="text-muted small">Subido por {lastDocument.userName || lastDocument.user} • {lastDocument.createdAt}</div>}
                     </div>
                   </div>
                 </CCarouselItem>
                 <CCarouselItem>
                   <div className="d-flex w-100 align-items-center justify-content-center" style={{ minHeight: 160 }}>
                     <div style={{ textAlign: 'center' }}>
-                      <h5 className="mb-1">Documentos esta semana</h5>
-                      <div style={{ fontWeight: 700, fontSize: 24 }}>{documentsThisWeek}</div>
-                      <div className="text-muted small">Total subidos en la semana</div>
-                    </div>
+                        <h5 className="mb-1">Documentos esta semana</h5>
+                        <div style={{ fontWeight: 700, fontSize: 24 }}>{documentsThisWeek}</div>
+                        <div className="text-muted small">Total subidos en la semana</div>
+                      </div>
                   </div>
                 </CCarouselItem>
               </CCarousel>
@@ -177,7 +202,7 @@ const Documents = () => {
                   {filtered.map((d) => (
                     <CTableRow key={d.id} className="align-middle">
                       <CTableDataCell>{d.id}</CTableDataCell>
-                      <CTableDataCell>{d.user}</CTableDataCell>
+                      <CTableDataCell>{d.userName || d.user}</CTableDataCell>
                       <CTableDataCell style={{ fontWeight: 700 }}>{d.title}</CTableDataCell>
                       <CTableDataCell>{d.category}</CTableDataCell>
                       <CTableDataCell>{d.createdAt}</CTableDataCell>
@@ -223,6 +248,15 @@ const Documents = () => {
               <div className="mb-3">
                 <CFormLabel>Archivo</CFormLabel>
                 <CFormInput type="file" onChange={(e) => setForm({ ...form, file: e.target.files && e.target.files[0] })} />
+              </div>
+              <div className="mb-3">
+                <CFormLabel>Proyecto (opcional)</CFormLabel>
+                <CFormSelect value={form.projectId} onChange={(e) => setForm({ ...form, projectId: e.target.value })}>
+                  <option value="">Ninguno</option>
+                  {projectsList.map((p) => (
+                    <option key={p.id} value={p.id}>{p.title}</option>
+                  ))}
+                </CFormSelect>
               </div>
               <div className="mb-3">
                 <CFormLabel>Usuario</CFormLabel>

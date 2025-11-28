@@ -28,7 +28,7 @@ import {
 const Users = () => {
 	const [search, setSearch] = useState('')
 
-	// Mock data
+	
 	const initialUsers = [
 		{
 			id: 1,
@@ -59,9 +59,17 @@ const Users = () => {
 		},
 	]
 
-	const [users, setUsers] = useState(initialUsers)
+	const [users, setUsers] = useState([])
 	const [showCreate, setShowCreate] = useState(false)
 	const [createForm, setCreateForm] = useState({ cedula: '', nombre: '', apellido: '', rol: 'Profesor' })
+	const base = window.__API_BASE__ || 'http://localhost:3001'
+
+	React.useEffect(() => {
+		fetch(`${base}/users?_sort=createdAt&_order=desc`)
+			.then((r) => r.json())
+			.then(setUsers)
+			.catch(() => setUsers([]))
+	}, [])
 
 	const filtered = useMemo(() => {
 		if (!search) return users
@@ -72,30 +80,32 @@ const Users = () => {
 				(`${u.nombre} ${u.apellido}`.toLowerCase().includes(q) || u.rol.toLowerCase().includes(q))
 			)
 		})
-	}, [search])
+	}, [search, users])
 
 	const handleCreate = () => {
 		setShowCreate(true)
 	}
 
 	const handleSaveCreate = () => {
-		// basic validation
+		
 		if (!createForm.cedula || !createForm.nombre) {
 			alert('Por favor rellena Cédula y Nombre')
 			return
 		}
-		const nextId = users.length ? Math.max(...users.map((u) => u.id)) + 1 : 1
 		const now = new Date().toISOString().slice(0, 10)
 		const newUser = {
-			id: nextId,
 			cedula: createForm.cedula,
 			nombre: createForm.nombre,
 			apellido: createForm.apellido,
+			fullName: `${createForm.nombre} ${createForm.apellido}`,
 			rol: createForm.rol,
 			createdAt: now,
 			updatedAt: now,
 		}
-		setUsers([newUser, ...users])
+		fetch(`${base}/users`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(newUser) })
+			.then((r) => r.json())
+			.then((created) => setUsers((prev) => [created, ...prev]))
+			.catch(() => alert('Error creando usuario'))
 		setShowCreate(false)
 		setCreateForm({ cedula: '', nombre: '', apellido: '', rol: 'Viewer' })
 	}
@@ -105,10 +115,10 @@ const Users = () => {
 	}
 
 	const handleDelete = (user) => {
-		if (window.confirm(`¿Eliminar usuario ${user.nombre} ${user.apellido}?`)) {
-			// Remove user from state (simulated)
-			setUsers(users.filter((u) => u.id !== user.id))
-		}
+		if (!window.confirm(`¿Eliminar usuario ${user.nombre} ${user.apellido}?`)) return
+		fetch(`${base}/users/${user.id}`, { method: 'DELETE' })
+			.then(() => setUsers((prev) => prev.filter((u) => u.id !== user.id)))
+			.catch(() => alert('Error eliminando usuario'))
 	}
 
 	return (
@@ -178,7 +188,7 @@ const Users = () => {
 				</CCol>
 			</CRow>
 
-				{/* Create user modal */}
+				
 				<CModal visible={showCreate} onClose={() => setShowCreate(false)}>
 					<CModalHeader>
 						<CModalTitle>Crear nuevo usuario</CModalTitle>

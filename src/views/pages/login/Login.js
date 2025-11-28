@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import {
   CAlert,
   CButton,
@@ -13,6 +13,7 @@ import {
   CRow,
 } from '@coreui/react'
 import { useNavigate } from 'react-router-dom'
+import { isAuthenticated } from '../../../utils/auth'
 import CIcon from '@coreui/icons-react'
 import { cilLockLocked, cilUser } from '@coreui/icons'
 
@@ -25,6 +26,8 @@ const Login = () => {
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
   const navigate = useNavigate()
+
+  
 
   const validateEmail = (e) => {
     return /^\S+@\S+\.\S+$/.test(e)
@@ -42,12 +45,65 @@ const Login = () => {
       setError('La contraseña debe tener al menos 4 caracteres')
       return
     }
+    
+    const base = window.__API_BASE__ || 'http://localhost:3001'
     setLoading(true)
-    setTimeout(() => {
-      setLoading(false)
-      setSuccess('Inicio de sesión correcto. Redirigiendo...')
-      navigate('/dashboard')
-    }, 900)
+    fetch(`${base}/auth?username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}`)
+      .then((res) => res.json())
+      .then((data) => {
+        
+        console.debug('[Login] auth response:', data)
+        setLoading(false)
+        if (Array.isArray(data) && data.length > 0) {
+          const entry = data[0]
+          
+          try {
+            localStorage.setItem('token', entry.token || '')
+            localStorage.setItem('userId', String(entry.userId || ''))
+            localStorage.setItem('username', username)
+            
+            console.debug('[Login] stored token:', entry.token)
+          } catch (err) {
+            
+          }
+          setSuccess('Inicio de sesión correcto. Redirigiendo...')
+          
+          setTimeout(() => {
+            try {
+              
+              console.debug('[Login] forcing hash -> #/dashboard and reload')
+              window.location.hash = '#/dashboard'
+              setTimeout(() => {
+                try {
+                  window.location.reload()
+                } catch (e) {
+                  
+                  try {
+                    navigate('/dashboard', { replace: true })
+                  } catch (err) {
+                    
+                  }
+                }
+              }, 150)
+            } catch (e) {
+              
+              try {
+                navigate('/dashboard', { replace: true })
+              } catch (err) {
+                
+              }
+            }
+          }, 200)
+        } else {
+          setError('Credenciales inválidas')
+        }
+      })
+      .catch((err) => {
+        setLoading(false)
+        
+        console.error('[Login] fetch error:', err)
+        setError('Error de conexión al servidor')
+      })
   }
 
   const handleRecover = (e) => {

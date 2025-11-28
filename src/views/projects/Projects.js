@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react'
+import React, { useMemo, useState, useEffect } from 'react'
 import {
   CRow,
   CCol,
@@ -31,14 +31,34 @@ import CIcon from '@coreui/icons-react'
 import { cilPencil, cilTrash, cilCheck } from '@coreui/icons'
 
 const Projects = () => {
-  const usersList = ['María López', 'Carlos Ruiz', 'Ana Gómez']
-  const initial = [
-    { id: 'P-1001', user: 'María López', title: 'Mapa de Alojamientos', category: 'Infraestructura', createdAt: '2025-11-01', updatedAt: '2025-11-05' },
-    { id: 'P-1002', user: 'Carlos Ruiz', title: 'Estadísticas Visitantes 2024', category: 'Investigación', createdAt: '2025-10-24', updatedAt: '2025-10-30' },
-    { id: 'P-1003', user: 'Ana Gómez', title: 'Rutas de Senderismo', category: 'Turismo', createdAt: '2025-09-12', updatedAt: '2025-11-12' },
-  ]
+  const [usersList, setUsersList] = useState(['María López', 'Carlos Ruiz', 'Ana Gómez'])
+  const [projects, setProjects] = useState([])
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
 
-  const [projects, setProjects] = useState(initial)
+  const base = window.__API_BASE__ || 'http://localhost:3001'
+
+  useEffect(() => {
+    const fetchData = async () => {
+      setLoading(true)
+      try {
+        const [uRes, pRes] = await Promise.all([
+          fetch(`${base}/users?_sort=createdAt&_order=desc`),
+          fetch(`${base}/projects?_sort=createdAt&_order=desc`),
+        ])
+        const [uData, pData] = await Promise.all([uRes.json(), pRes.json()])
+        setUsersList(uData.map((u) => u.fullName || `${u.nombre} ${u.apellido}`))
+        setProjects(
+          pData.map((p) => ({ id: p.id, user: p.userName || '', title: p.title, category: p.category || '', createdAt: p.createdAt || '', updatedAt: p.updatedAt || '' })),
+        )
+      } catch (err) {
+        setError('Error cargando datos de proyectos')
+      } finally {
+        setLoading(false)
+      }
+    }
+    fetchData()
+  }, [])
   const [titleFilter, setTitleFilter] = useState('')
   const [userFilter, setUserFilter] = useState('')
   const [dateFilter, setDateFilter] = useState('')
@@ -46,7 +66,7 @@ const Projects = () => {
   const [showCreate, setShowCreate] = useState(false)
   const [createForm, setCreateForm] = useState({ title: '', description: '', category: '', status: 'Borrador', image: null, user: usersList[0] })
 
-  // charts data
+  
   const barData = {
     labels: ['Semana 1', 'Semana 2', 'Semana 3', 'Semana 4'],
     datasets: [
@@ -74,20 +94,53 @@ const Projects = () => {
 
   const handleCreate = () => setShowCreate(true)
 
-  const handleSaveCreate = () => {
+  const handleSaveCreate = async () => {
     if (!createForm.title) {
       alert('El título es requerido')
       return
     }
     const id = `P-${Math.floor(1000 + Math.random() * 9000)}`
     const now = new Date().toISOString().slice(0, 10)
-    const newP = { id, user: createForm.user, title: createForm.title, category: createForm.category || 'General', createdAt: now, updatedAt: now }
-    setProjects([newP, ...projects])
-    setShowCreate(false)
-    setCreateForm({ title: '', description: '', category: '', status: 'Borrador', image: null, user: usersList[0] })
+    
+    try {
+      const usersRes = await fetch(`${base}/users`)
+      const usersData = await usersRes.json()
+      const matched = usersData.find((u) => (u.fullName || `${u.nombre} ${u.apellido}`) === createForm.user)
+      const payload = {
+        id,
+        title: createForm.title,
+        category: createForm.category || 'General',
+        userId: matched ? matched.id : null,
+        userName: createForm.user,
+        createdAt: now,
+        updatedAt: now,
+      }
+      const res = await fetch(`${base}/projects`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      })
+      if (!res.ok) throw new Error('Error creando proyecto')
+      const created = await res.json()
+      setProjects((prev) => [ { id: created.id, user: created.userName, title: created.title, category: created.category, createdAt: created.createdAt, updatedAt: created.updatedAt }, ...prev ])
+      setShowCreate(false)
+      setCreateForm({ title: '', description: '', category: '', status: 'Borrador', image: null, user: usersList[0] })
+    } catch (err) {
+      alert('No se pudo crear el proyecto')
+    }
   }
 
-  const handleDelete = (p) => setProjects(projects.filter((x) => x.id !== p.id))
+  const handleDelete = async (p) => {
+    if (!window.confirm('Eliminar proyecto?')) return
+    try {
+      const res = await fetch(`${base}/projects/${encodeURIComponent(p.id)}`, { method: 'DELETE' })
+      if (!res.ok) throw new Error('Error eliminando')
+      setProjects((prev) => prev.filter((x) => x.id !== p.id))
+    } catch (err) {
+      alert('No se pudo eliminar el proyecto')
+    }
+  }
+
   const handleEdit = (p) => alert(`Editar proyecto ${p.title}`)
   const handleApprove = (p) => alert(`Aprobar proyecto ${p.title}`)
 
