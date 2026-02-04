@@ -46,7 +46,7 @@ const Documents = () => {
   
   const documentsThisWeek = documents.filter((d) => d.createdAt && d.createdAt.startsWith('2025-11')).length
 
-  const base = window.__API_BASE__ || 'http://localhost:3001'
+  const base = (import.meta?.env?.VITE_API_BASE) || window.__API_BASE__ || 'http://localhost:3001'
 
   
   React.useEffect(() => {

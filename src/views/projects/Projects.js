@@ -36,7 +36,7 @@ const Projects = () => {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
-  const base = window.__API_BASE__ || 'http://localhost:3001'
+  const base = (import.meta?.env?.VITE_API_BASE) || window.__API_BASE__ || 'http://localhost:3001'
 
   useEffect(() => {
     const fetchData = async () => {

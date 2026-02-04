@@ -13,7 +13,8 @@ import {
   CRow,
 } from '@coreui/react'
 import { useNavigate } from 'react-router-dom'
-import { isAuthenticated } from '../../../utils/auth'
+import { isAuthenticated, getToken } from '../../../utils/auth'
+import authApi from '../../../api/endpoints/authApi.js'
 import CIcon from '@coreui/icons-react'
 import { cilLockLocked, cilUser } from '@coreui/icons'
 
@@ -29,102 +30,67 @@ const Login = () => {
 
   
 
-  const validateEmail = (e) => {
-    return /^\S+@\S+\.\S+$/.test(e)
-  }
+  const validateEmail = (e) => /^\S+@\S+\.\S+$/.test(e)
 
-  const handleLogin = (e) => {
+  const handleLogin = async (e) => {
     e.preventDefault()
     setError('')
     setSuccess('')
-    if (!username.trim()) {
-      setError('El usuario es obligatorio')
-      return
-    }
-    if (!password || password.length < 4) {
-      setError('La contraseña debe tener al menos 4 caracteres')
-      return
-    }
-    
-    const base = window.__API_BASE__ || 'http://localhost:3001'
+    if (!username.trim()) return setError('El usuario es obligatorio')
+    if (!password || password.length < 4) return setError('La contraseña debe tener al menos 4 caracteres')
+
     setLoading(true)
-    fetch(`${base}/auth?username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}`)
-      .then((res) => res.json())
-      .then((data) => {
-        
-        console.debug('[Login] auth response:', data)
-        setLoading(false)
-        if (Array.isArray(data) && data.length > 0) {
-          const entry = data[0]
-          
-          try {
-            localStorage.setItem('token', entry.token || '')
-            localStorage.setItem('userId', String(entry.userId || ''))
-            localStorage.setItem('username', username)
-            
-            console.debug('[Login] stored token:', entry.token)
-          } catch (err) {
-            
-          }
-          setSuccess('Inicio de sesión correcto. Redirigiendo...')
-          
-          setTimeout(() => {
-            try {
-              
-              console.debug('[Login] forcing hash -> #/dashboard and reload')
-              window.location.hash = '#/dashboard'
-              setTimeout(() => {
-                try {
-                  window.location.reload()
-                } catch (e) {
-                  
-                  try {
-                    navigate('/dashboard', { replace: true })
-                  } catch (err) {
-                    
-                  }
-                }
-              }, 150)
-            } catch (e) {
-              
-              try {
-                navigate('/dashboard', { replace: true })
-              } catch (err) {
-                
-              }
-            }
-          }, 200)
-        } else {
-          setError('Credenciales inválidas')
+    try {
+      await authApi.login({ username, password })
+      const token = getToken()
+      if (token) {
+        setSuccess('Inicio de sesión correcto. Redirigiendo...')
+        navigate('/dashboard', { replace: true })
+        // Force a reload to ensure app state picks up auth token
+        try {
+          window.location.reload()
+        } catch (e) {
+          // ignore reload errors
         }
-      })
-      .catch((err) => {
-        setLoading(false)
-        
-        console.error('[Login] fetch error:', err)
-        setError('Error de conexión al servidor')
-      })
+      } else {
+        setError('No se recibió token de autenticación')
+      }
+    } catch (err) {
+      console.error('[Login] auth error:', err)
+      const message = err?.response?.data?.message || 'Error de autenticación'
+      setError(message)
+    } finally {
+      setLoading(false)
+    }
   }
 
-  const handleRecover = (e) => {
+  const handleRecover = async (e) => {
     e.preventDefault()
     setError('')
     setSuccess('')
-    if (!email.trim()) {
-      setError('Introduce tu correo electrónico')
-      return
-    }
-    if (!validateEmail(email)) {
-      setError('Introduce un correo válido')
-      return
-    }
+    if (!email.trim()) return setError('Introduce tu correo electrónico')
+    if (!validateEmail(email)) return setError('Introduce un correo válido')
+
     setLoading(true)
-    setTimeout(() => {
+    try {
+      const res = await authApi.recoverPassword({ email: email.trim() })
+      const msg = res?.message || 'Si el correo existe, recibirás instrucciones para recuperar tu contraseña'
+      setSuccess(msg)
+      setTimeout(() => setFlipped(false), 1200)
+    } catch (err) {
+      console.error('[Recover] error:', err)
+      const message = err?.response?.data?.message || 'Error al enviar el correo de recuperación'
+      setError(message)
+    } finally {
       setLoading(false)
-      setSuccess('Si el correo existe, recibirás instrucciones para recuperar tu contraseña')
-      setTimeout(() => setFlipped(false), 1400)
-    }, 900)
+    }
   }
+
+  useEffect(() => {
+    if (isAuthenticated()) {
+      navigate('/dashboard', { replace: true })
+    }
+  }, [])
 
   return (
     <div className="bg-body-tertiary min-vh-100 d-flex flex-row align-items-center login-animated">

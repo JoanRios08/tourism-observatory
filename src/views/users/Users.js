@@ -62,7 +62,7 @@ const Users = () => {
 	const [users, setUsers] = useState([])
 	const [showCreate, setShowCreate] = useState(false)
 	const [createForm, setCreateForm] = useState({ cedula: '', nombre: '', apellido: '', rol: 'Profesor' })
-	const base = window.__API_BASE__ || 'http://localhost:3001'
+	const base = (import.meta?.env?.VITE_API_BASE) || window.__API_BASE__ || 'http://localhost:3001'
 /* faltaba una s en users*/
 	React.useEffect(() => {
 		fetch(`${base}/users?_sort=createdAt&_order=desc`)

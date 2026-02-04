@@ -24,7 +24,7 @@ const Dashboard = () => {
   const [users, setUsers] = useState([])
   const [loading, setLoading] = useState(false)
 
-  const base = window.__API_BASE__ || 'http://localhost:3001'
+  const base = (import.meta?.env?.VITE_API_BASE) || window.__API_BASE__ || 'http://localhost:3001'
 
   useEffect(() => {
     const fetchAll = async () => {

@@ -39,7 +39,7 @@ const Post = () => {
 	const [showCreate, setShowCreate] = useState(false)
 	const [createForm, setCreateForm] = useState({ user: '', title: '', category: '' })
 
-	const base = window.__API_BASE__ || 'http://localhost:3001'
+	const base = (import.meta?.env?.VITE_API_BASE) || window.__API_BASE__ || 'http://localhost:3001'
 
 	React.useEffect(() => {
 		fetch(`${base}/posts?_sort=createdAt&_order=desc`)

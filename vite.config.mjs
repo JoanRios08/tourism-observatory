@@ -11,9 +11,7 @@ export default defineConfig(() => {
     },
     css: {
       postcss: {
-        plugins: [
-          autoprefixer({}), // add options if needed
-        ],
+        plugins: [autoprefixer({})],
       },
     },
     esbuild: {
@@ -42,7 +40,23 @@ export default defineConfig(() => {
     server: {
       port: 3000,
       proxy: {
-        // https://vitejs.dev/config/server-options.html
+        // Proxy API requests to the remote backend during development to avoid CORS.
+        // Adjust the target if your backend runs elsewhere.
+        '/api': {
+          target: 'https://backend-observatory.onrender.com',
+          changeOrigin: true,
+          secure: false,
+        },
+        '/auth': {
+          target: 'https://backend-observatory.onrender.com',
+          changeOrigin: true,
+          secure: false,
+        },
+        '/login': {
+          target: 'https://backend-observatory.onrender.com',
+          changeOrigin: true,
+          secure: false,
+        },
       },
     },
   }
