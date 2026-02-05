@@ -57,7 +57,23 @@ const Login = () => {
       }
     } catch (err) {
       console.error('[Login] auth error:', err)
-      const message = err?.response?.data?.message || 'Error de autenticación'
+      console.error('Response data:', err?.response?.data)
+      console.error('Response status:', err?.response?.status)
+      const resp = err?.response?.data
+      const serverErr = resp?.error || resp?.message || err?.message || 'Error de autenticación'
+      let detailsText = ''
+      if (resp?.details && Array.isArray(resp.details)) {
+        detailsText = resp.details
+          .map((d) => {
+            if (!d) return ''
+            const path = d.path ? `${d.path}: ` : ''
+            const msg = d.message || (typeof d === 'string' ? d : JSON.stringify(d))
+            return `${path}${msg}`
+          })
+          .filter(Boolean)
+          .join(' — ')
+      }
+      const message = detailsText ? `${serverErr} — ${detailsText}` : serverErr
       setError(message)
     } finally {
       setLoading(false)

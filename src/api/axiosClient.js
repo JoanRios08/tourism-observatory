@@ -1,11 +1,9 @@
 import axios from 'axios'
 
-// Determine baseURL:
-// - If VITE_API_BASE or window.__API_BASE__ is set, use it (production).
-// - If running on localhost, use relative '' so Vite proxy or local proxy handles requests.
+// Determine baseURL: prefer explicit env var; during local dev use '' so Vite proxy forwards to remote backend.
 const envBase = import.meta?.env?.VITE_API_BASE ?? window.__API_BASE__ ?? ''
 const isLocalhost = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
-const baseURL = isLocalhost ? '' : envBase || 'https://backend-observatory.onrender.com'
+const baseURL = isLocalhost ? (envBase || '') : (envBase || 'https://backend-observatory.onrender.com')
 
 const axiosClient = axios.create({
   baseURL,
@@ -43,8 +41,23 @@ axiosClient.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401) {
-      localStorage.removeItem('authToken')
-      window.location.href = '/login'
+      try {
+        localStorage.removeItem('authToken')
+      } catch (e) {
+        // ignore
+      }
+      try {
+        // Use hash-based redirect consistent with the app router
+        window.location.hash = '#/login'
+        window.location.reload()
+      } catch (e) {
+        // fallback to href if hash not supported
+        try {
+          window.location.href = '/login'
+        } catch (e2) {
+          // ignore
+        }
+      }
     }
     return Promise.reject(error)
   },

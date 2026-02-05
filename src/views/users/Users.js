@@ -1,28 +1,29 @@
 import React, { useMemo, useState } from 'react'
+import userApi from '../../api/endpoints/usersApi'
 import {
-	CRow,
-	CCol,
-	CCard,
-	CCardHeader,
-	CCardBody,
-	CInputGroup,
-	CFormInput,
-	CButton,
-	CTable,
-	CTableHead,
-	CTableBody,
-	CTableRow,
-	CTableHeaderCell,
-	CTableDataCell,
-	CBadge,
-	CModal,
-	CModalHeader,
-	CModalTitle,
-	CModalBody,
-	CModalFooter,
-	CForm,
-	CFormLabel,
-	CFormSelect,
+    CRow,
+    CCol,
+    CCard,
+    CCardHeader,
+    CCardBody,
+    CInputGroup,
+    CFormInput,
+    CButton,
+    CTable,
+    CTableHead,
+    CTableRow,
+    CTableHeaderCell,
+    CTableBody,
+    CTableDataCell,
+    CBadge,
+    CModal,
+    CModalHeader,
+    CModalTitle,
+    CModalBody,
+    CModalFooter,
+    CForm,
+    CFormLabel,
+    CFormSelect,
 } from '@coreui/react'
 
 const Users = () => {
@@ -61,64 +62,161 @@ const Users = () => {
 
 	const [users, setUsers] = useState([])
 	const [showCreate, setShowCreate] = useState(false)
-	const [createForm, setCreateForm] = useState({ cedula: '', nombre: '', apellido: '', rol: 'Profesor' })
-	const base = (import.meta?.env?.VITE_API_BASE) || window.__API_BASE__ || 'http://localhost:3001'
-/* faltaba una s en users*/
+ 	const [showEdit, setShowEdit] = useState(false)
+ 	const [editForm, setEditForm] = useState(null)
+	const [showDelete, setShowDelete] = useState(false)
+	const [deleteTarget, setDeleteTarget] = useState(null)
+	const [createForm, setCreateForm] = useState({ dni: '', first_name: '', last_name: '', email: '', role_id: 1 })
 	React.useEffect(() => {
-		fetch(`${base}/users?_sort=createdAt&_order=desc`)
-			.then((r) => r.json())
-			.then(setUsers)
+		userApi
+			.getUsers()
+			.then((res) => {
+				// Normalize possible response shapes into an array
+				const d = res && res.data ? res.data : res
+				let items = []
+				if (Array.isArray(d)) items = d
+				else if (Array.isArray(d?.data)) items = d.data
+				else if (Array.isArray(d?.users)) items = d.users
+				else items = []
+				setUsers(items)
+			})
 			.catch(() => setUsers([]))
 	}, [])
 
+	// Helpers to safely extract specific display fields from different API shapes
+	const getFirstName = (u) => {
+		if (!u) return ''
+		if (u.first_name) return u.first_name
+		if (u.nombre) return u.nombre
+		if (u.firstName) return u.firstName
+		if (u.name) return u.name
+		if (u.fullName) return String(u.fullName).split(' ')[0]
+		return ''
+	}
+
+	const getLastName = (u) => {
+		if (!u) return ''
+		if (u.last_name) return u.last_name
+		if (u.apellido) return u.apellido
+		if (u.lastName) return u.lastName
+		if (u.fullName) return String(u.fullName).split(' ').slice(1).join(' ')
+		return ''
+	}
+
+	const getDni = (u) => {
+		if (!u) return ''
+		return u.dni || u.cedula || u.document || u.idNumber || ''
+	}
+
+	const getEmail = (u) => {
+		if (!u) return ''
+		return u.email || u.email_address || u.username || ''
+	}
+
+	const getRole = (u) => {
+		if (!u) return 'N/D'
+		return u.rol || u.role || u.role_name || (u.roles && Array.isArray(u.roles) && u.roles[0]?.name) || 'N/D'
+	}
+
+	const formatDate = (val) => {
+		if (!val) return ''
+		try {
+			// Accept ISO or date-only strings
+			if (typeof val === 'string' && val.includes('T')) return val.split('T')[0]
+			return new Date(val).toISOString().slice(0, 10)
+		} catch (e) {
+			return String(val)
+		}
+	}
+
 	const filtered = useMemo(() => {
-		if (!search) return users
+		const list = Array.isArray(users) ? users : []
+		if (!search) return list
 		const q = search.toLowerCase()
-		return users.filter((u) => {
+		return list.filter((u) => {
 			return (
-				(u.cedula || '').toLowerCase().includes(q) ||
-				(`${u.nombre} ${u.apellido}`.toLowerCase().includes(q) || u.rol.toLowerCase().includes(q))
+				(String(getDni(u) || '')).toLowerCase().includes(q) ||
+				(`${String(getFirstName(u) || '')} ${String(getLastName(u) || '')}`).toLowerCase().includes(q) ||
+				(String(getRole(u) || '')).toLowerCase().includes(q) ||
+				(String(getEmail(u) || '')).toLowerCase().includes(q)
 			)
 		})
 	}, [search, users])
 
-	const handleCreate = () => {
-		setShowCreate(true)
-	}
+	const handleCreate = () => setShowCreate(true)
 /*faltaba una e en handle y shworeate*/
-	const handleSaveCreate = () => {
-		
-		if (!createForm.cedula || !createForm.nombre) {
-			alert('Por favor rellena Cédula y Nombre')
+	const handleSaveCreate = async () => {
+		if (!createForm.dni || !createForm.first_name) {
+			alert('Por favor rellena DNI y Nombre')
 			return
 		}
-		const now = new Date().toISOString().slice(0, 10)
-		const newUser = {
-			cedula: createForm.cedula,
-			nombre: createForm.nombre,
-			apellido: createForm.apellido,
-			fullName: `${createForm.nombre} ${createForm.apellido}`,
-			rol: createForm.rol,
-			createdAt: now,
-			updatedAt: now,
+		const payload = {
+			first_name: createForm.first_name,
+			last_name: createForm.last_name,
+			dni: createForm.dni,
+			email: createForm.email,
+			role_id: createForm.role_id,
 		}
-		fetch(`${base}/users`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(newUser) })
-			.then((r) => r.json())
-			.then((created) => setUsers((prev) => [created, ...prev]))
-			.catch(() => alert('Error creando usuario'))
+		try {
+			const res = await userApi.createUser(payload)
+			const created = res?.data || res
+			setUsers((prev) => [created, ...prev])
+		} catch (e) {
+			alert('Error creando usuario')
+		}
 		setShowCreate(false)
-		setCreateForm({ cedula: '', nombre: '', apellido: '', rol: 'Viewer' })
+		setCreateForm({ dni: '', first_name: '', last_name: '', email: '', role_id: 1 })
 	}
 
 	const handleEdit = (user) => {
-		alert(`Editar usuario ${user.nombre} ${user.apellido} (id: ${user.id})`)
+		setEditForm({
+			id: user.id || user._id,
+			dni: user.dni || user.cedula || '',
+			first_name: user.first_name || user.nombre || '',
+			last_name: user.last_name || user.apellido || '',
+			email: user.email || '',
+			role_id: user.role_id || user.roleId || user.role_id || null,
+		})
+		setShowEdit(true)
+	}
+
+	const handleSaveEdit = async () => {
+		if (!editForm) return
+		const id = editForm.id
+		const payload = {
+			first_name: editForm.first_name,
+			last_name: editForm.last_name,
+			dni: editForm.dni,
+			email: editForm.email,
+			role_id: editForm.role_id,
+		}
+		try {
+			const res = await userApi.updateUser(id, payload)
+			const updated = res?.data || res || payload
+			setUsers((prev) => prev.map((u) => (u.id === id || u._id === id ? updated : u)))
+			setShowEdit(false)
+			setEditForm(null)
+		} catch (e) {
+			alert('Error actualizando usuario')
+		}
 	}
 
 	const handleDelete = (user) => {
-		if (!window.confirm(`¿Eliminar usuario ${user.nombre} ${user.apellido}?`)) return
-		fetch(`${base}/users/${user.id}`, { method: 'DELETE' })
-			.then(() => setUsers((prev) => prev.filter((u) => u.id !== user.id)))
-			.catch(() => alert('Error eliminando usuario'))
+		setDeleteTarget(user)
+		setShowDelete(true)
+	}
+
+	const confirmDelete = async () => {
+		if (!deleteTarget) return
+		const id = deleteTarget.id || deleteTarget._id
+		try {
+			await userApi.deleteUser(id)
+			setUsers((prev) => prev.filter((u) => !(u.id === id || u._id === id)))
+			setShowDelete(false)
+			setDeleteTarget(null)
+		} catch (e) {
+			alert('Error eliminando usuario')
+		}
 	}
 
 	return (
@@ -159,28 +257,32 @@ const Users = () => {
 									</CTableRow>
 								</CTableHead>
 								<CTableBody>
-									{filtered.map((u) => (
-										<CTableRow key={u.id}>
-											<CTableDataCell>{u.cedula}</CTableDataCell>
-											<CTableDataCell>{u.nombre}</CTableDataCell>
-											<CTableDataCell>{u.apellido}</CTableDataCell>
-											<CTableDataCell>
-												<CBadge color={u.rol === 'Administrador' ? 'primary' : u.rol === 'Coordinador' ? 'info' : 'secondary'}>
-													{u.rol}
-												</CBadge>
-											</CTableDataCell>
-											<CTableDataCell>{u.createdAt}</CTableDataCell>
-											<CTableDataCell>{u.updatedAt}</CTableDataCell>
-											<CTableDataCell>
-												<CButton size="sm" color="info" className="me-2" onClick={() => handleEdit(u)}>
-													Editar
-												</CButton>
-												<CButton size="sm" color="danger" onClick={() => handleDelete(u)}>
-													Eliminar
-												</CButton>
-											</CTableDataCell>
-										</CTableRow>
-									))}
+									{filtered.map((u) => {
+										const firstName = getFirstName(u)
+										const lastName = getLastName(u)
+										return (
+											<CTableRow key={u.id || u._id || JSON.stringify(u)}>
+												<CTableDataCell>{getDni(u) || u.id || ''}</CTableDataCell>
+												<CTableDataCell>{firstName}</CTableDataCell>
+												<CTableDataCell>{lastName}</CTableDataCell>
+												<CTableDataCell>
+													<CBadge color={getRole(u) === 'Administrador' ? 'primary' : getRole(u) === 'Coordinador' ? 'info' : 'secondary'}>
+														{getRole(u)}
+													</CBadge>
+												</CTableDataCell>
+												<CTableDataCell>{formatDate(u.createdAt || u.created_at)}</CTableDataCell>
+												<CTableDataCell>{formatDate(u.updatedAt || u.updated_at)}</CTableDataCell>
+												<CTableDataCell>
+													<CButton size="sm" color="info" className="me-2" onClick={() => handleEdit(u)}>
+														Editar
+													</CButton>
+													<CButton size="sm" color="danger" onClick={() => handleDelete(u)}>
+														Eliminar
+													</CButton>
+												</CTableDataCell>
+											</CTableRow>
+										)
+									})}
 								</CTableBody>
 							</CTable>
 						</CCardBody>
@@ -188,42 +290,103 @@ const Users = () => {
 				</CCol>
 			</CRow>
 
-				<CModal visible={showCreate} onClose={() => setShowCreate(false)}> 
+									<CModal visible={showCreate} onClose={() => setShowCreate(false)}> 
 					<CModalHeader>
 						<CModalTitle>Crear nuevo usuario</CModalTitle>
 					</CModalHeader>
 					<CModalBody>
 						<CForm>
 							<div className="mb-3">
-								<CFormLabel>Cédula</CFormLabel>
-								<CFormInput value={createForm.cedula} onChange={(e) => setCreateForm({ ...createForm, cedula: e.target.value })} />
+								<CFormLabel>DNI</CFormLabel>
+								<CFormInput value={createForm.dni} onChange={(e) => setCreateForm({ ...createForm, dni: e.target.value })} />
 							</div>
 							<div className="mb-3">
 								<CFormLabel>Nombre</CFormLabel>
-								<CFormInput value={createForm.nombre} onChange={(e) => setCreateForm({ ...createForm, nombre: e.target.value })} />
+								<CFormInput value={createForm.first_name} onChange={(e) => setCreateForm({ ...createForm, first_name: e.target.value })} />
 							</div>
 							<div className="mb-3">
 								<CFormLabel>Apellido</CFormLabel>
-								<CFormInput value={createForm.apellido} onChange={(e) => setCreateForm({ ...createForm, apellido: e.target.value })} />
+								<CFormInput value={createForm.last_name} onChange={(e) => setCreateForm({ ...createForm, last_name: e.target.value })} />
+							</div>
+							<div className="mb-3">
+								<CFormLabel>Email</CFormLabel>
+								<CFormInput value={createForm.email} onChange={(e) => setCreateForm({ ...createForm, email: e.target.value })} />
 							</div>
 							<div className="mb-3">
 								<CFormLabel>Rol</CFormLabel>
-                                						<CFormSelect value={createForm.rol} onChange={(e) => setCreateForm({ ...createForm, rol: e.target.value })}>
-                                							<option>Administrador</option>
-                                							<option>Coordinador</option>
-                                							<option>Profesor</option>
-                                						</CFormSelect>
+								<CFormSelect value={createForm.role_id} onChange={(e) => setCreateForm({ ...createForm, role_id: Number(e.target.value) })}>
+									<option value={1}>Administrador</option>
+									<option value={2}>Coordinador</option>
+									<option value={3}>Profesor</option>
+								</CFormSelect>
 							</div>
 						</CForm>
 					</CModalBody>
 					<CModalFooter>
 						<CButton color="secondary" onClick={() => setShowCreate(false)}>Cancelar</CButton>
-						<CButton color="primary" onClick={handleSaveCreate}>Crear</CButton>
+												<CButton color="primary" onClick={handleSaveCreate}>Crear</CButton>
 					</CModalFooter>
 				</CModal>
+
+										{/* Edit modal */}
+										<CModal visible={showEdit} onClose={() => setShowEdit(false)}>
+											<CModalHeader>
+												<CModalTitle>Editar usuario</CModalTitle>
+											</CModalHeader>
+											<CModalBody>
+												<CForm>
+													<div className="mb-3">
+														<CFormLabel>DNI</CFormLabel>
+														<CFormInput value={editForm?.dni || ''} onChange={(e) => setEditForm({ ...editForm, dni: e.target.value })} />
+													</div>
+													<div className="mb-3">
+														<CFormLabel>Nombre</CFormLabel>
+														<CFormInput value={editForm?.first_name || ''} onChange={(e) => setEditForm({ ...editForm, first_name: e.target.value })} />
+													</div>
+													<div className="mb-3">
+														<CFormLabel>Apellido</CFormLabel>
+														<CFormInput value={editForm?.last_name || ''} onChange={(e) => setEditForm({ ...editForm, last_name: e.target.value })} />
+													</div>
+													<div className="mb-3">
+														<CFormLabel>Email</CFormLabel>
+														<CFormInput value={editForm?.email || ''} onChange={(e) => setEditForm({ ...editForm, email: e.target.value })} />
+													</div>
+													<div className="mb-3">
+														<CFormLabel>Rol</CFormLabel>
+														<CFormSelect value={editForm?.role_id || ''} onChange={(e) => setEditForm({ ...editForm, role_id: Number(e.target.value) })}>
+															<option value={1}>Administrador</option>
+															<option value={2}>Coordinador</option>
+															<option value={3}>Profesor</option>
+														</CFormSelect>
+													</div>
+												</CForm>
+											</CModalBody>
+											<CModalFooter>
+												<CButton color="secondary" onClick={() => setShowEdit(false)}>Cancelar</CButton>
+												<CButton color="primary" onClick={handleSaveEdit}>Guardar</CButton>
+											</CModalFooter>
+										</CModal>
+
+										{/* Delete confirmation modal */}
+										<CModal visible={showDelete} onClose={() => setShowDelete(false)}>
+											<CModalHeader>
+												<CModalTitle>Eliminar usuario</CModalTitle>
+											</CModalHeader>
+											<CModalBody>
+												{deleteTarget ? (
+													<p>¿Eliminar usuario <strong>{getFirstName(deleteTarget)} {getLastName(deleteTarget)}</strong> (ID: {getDni(deleteTarget) || deleteTarget.id})?</p>
+												) : (
+													<p>¿Eliminar usuario?</p>
+												)}
+											</CModalBody>
+											<CModalFooter>
+												<CButton color="secondary" onClick={() => setShowDelete(false)}>Cancelar</CButton>
+												<CButton color="danger" onClick={confirmDelete}>Eliminar</CButton>
+											</CModalFooter>
+										</CModal>
 		</>
 	)
-}
 
+}
 export default Users
 

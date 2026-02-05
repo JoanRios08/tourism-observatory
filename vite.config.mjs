@@ -57,6 +57,21 @@ export default defineConfig(() => {
           changeOrigin: true,
           secure: false,
         },
+        '/users': {
+          target: 'https://backend-observatory.onrender.com',
+          changeOrigin: true,
+          secure: false,
+        },
+        '/projects': {
+          target: 'https://backend-observatory.onrender.com',
+          changeOrigin: true,
+          secure: false,
+        },
+        '/documents': {
+          target: 'https://backend-observatory.onrender.com',
+          changeOrigin: true,
+          secure: false,
+        },
       },
     },
   }
