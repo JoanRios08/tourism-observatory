@@ -1,22 +1,13 @@
 import React from 'react'
 import { useSelector, useDispatch } from 'react-redux'
 
-import {
-  CCloseButton,
-  CSidebar,
-  CSidebarBrand,
-  CSidebarFooter,
-  CSidebarHeader,
-  CSidebarToggler,
-} from '@coreui/react'
-import CIcon from '@coreui/icons-react'
+import { CSidebar, CSidebarBrand, CSidebarNav, CSidebarToggler } from '@coreui/react'
 
 import { AppSidebarNav } from './AppSidebarNav'
 
-import { logo } from 'src/assets/brand/logo'
-import { sygnet } from 'src/assets/brand/sygnet'
+// Importación de tu logo
+import observatorioLogo from 'src/assets/images/observatorio.jpg'
 
-// sidebar nav config
 import navigation from '../_nav'
 
 const AppSidebar = () => {
@@ -26,8 +17,6 @@ const AppSidebar = () => {
 
   return (
     <CSidebar
-      className="border-end"
-      colorScheme="dark"
       position="fixed"
       unfoldable={unfoldable}
       visible={sidebarShow}
@@ -35,23 +24,51 @@ const AppSidebar = () => {
         dispatch({ type: 'set', sidebarShow: visible })
       }}
     >
-      <CSidebarHeader className="border-bottom">
-        <CSidebarBrand to="/">
-          <CIcon customClassName="sidebar-brand-full" icon={logo} height={32} />
-          <CIcon customClassName="sidebar-brand-narrow" icon={sygnet} height={32} />
-        </CSidebarBrand>
-        <CCloseButton
-          className="d-lg-none"
-          dark
-          onClick={() => dispatch({ type: 'set', sidebarShow: false })}
+      <CSidebarBrand 
+        className="d-none d-md-flex" 
+        to="/" 
+        style={{ 
+          textDecoration: 'none', 
+          backgroundColor: '#fff', // Fondo blanco para que el JPG no desentone
+          display: 'flex',         // Activamos Flexbox
+          justifyContent: 'center', // Centrado horizontal
+          alignItems: 'center',     // Centrado vertical
+          padding: '15px 0',       // Espacio arriba y abajo
+          borderBottom: '1px solid #ebedef' 
+        }}
+      >
+        {/* LOGO MODO NORMAL (Más grande) */}
+        <img 
+          src={observatorioLogo} 
+          alt="Logo Observatorio" 
+          className="sidebar-brand-full" 
+          style={{ 
+            height: '100px',        // Aumentado de 45px a 60px
+            width: 'auto',
+            display: 'block'
+          }} 
         />
-      </CSidebarHeader>
-      <AppSidebarNav items={navigation} />
-      <CSidebarFooter className="border-top d-none d-lg-flex">
-        <CSidebarToggler
-          onClick={() => dispatch({ type: 'set', sidebarUnfoldable: !unfoldable })}
+        
+        {/* LOGO MODO NARROW (Cuando se encoge la barra) */}
+        <img 
+          src={observatorioLogo} 
+          alt="Logo" 
+          className="sidebar-brand-narrow" 
+          style={{ 
+            height: '35px', 
+            width: 'auto' 
+          }} 
         />
-      </CSidebarFooter>
+      </CSidebarBrand>
+
+      <CSidebarNav>
+        <AppSidebarNav items={navigation} />
+      </CSidebarNav>
+
+      <CSidebarToggler
+        className="d-none d-lg-flex"
+        onClick={() => dispatch({ type: 'set', sidebarUnfoldable: !unfoldable })}
+      />
     </CSidebar>
   )
 }

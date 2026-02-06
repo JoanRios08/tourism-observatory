@@ -43,8 +43,8 @@ const _nav = [
   },
   {
     component: CNavItem,
-    name: 'Ubicaciones',
-    to: '/locations',
+    name: 'Autores',
+    to: '/authors',
     icon: <CIcon icon={cilMap} customClassName="nav-icon" />,
   },
 ]

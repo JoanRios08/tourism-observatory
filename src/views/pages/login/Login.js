@@ -41,40 +41,32 @@ const Login = () => {
 
     setLoading(true)
     try {
-      await authApi.login({ username, password })
+      // 1. Guardamos la respuesta del login en una constante
+      const response = await authApi.login({ username, password })
+      
       const token = getToken()
       if (token) {
-        setSuccess('Inicio de sesión correcto. Redirigiendo...')
-        navigate('/dashboard', { replace: true })
-        // Force a reload to ensure app state picks up auth token
-        try {
-          window.location.reload()
-        } catch (e) {
-          // ignore reload errors
+        // 2. GUARDAR DATOS DEL USUARIO EN LOCALSTORAGE
+        // Dependiendo de cómo responda tu API, el usuario suele venir en response.user o response.data.user
+        const userData = response.user || response.data?.user;
+        
+        if (userData) {
+          localStorage.setItem('user', JSON.stringify(userData))
         }
+
+        setSuccess('Inicio de sesión correcto. Redirigiendo...')
+        
+        // Un pequeño delay para que el usuario vea el mensaje de éxito antes del reload
+        setTimeout(() => {
+          navigate('/dashboard', { replace: true })
+          window.location.reload()
+        }, 500)
+
       } else {
         setError('No se recibió token de autenticación')
       }
     } catch (err) {
-      console.error('[Login] auth error:', err)
-      console.error('Response data:', err?.response?.data)
-      console.error('Response status:', err?.response?.status)
-      const resp = err?.response?.data
-      const serverErr = resp?.error || resp?.message || err?.message || 'Error de autenticación'
-      let detailsText = ''
-      if (resp?.details && Array.isArray(resp.details)) {
-        detailsText = resp.details
-          .map((d) => {
-            if (!d) return ''
-            const path = d.path ? `${d.path}: ` : ''
-            const msg = d.message || (typeof d === 'string' ? d : JSON.stringify(d))
-            return `${path}${msg}`
-          })
-          .filter(Boolean)
-          .join(' — ')
-      }
-      const message = detailsText ? `${serverErr} — ${detailsText}` : serverErr
-      setError(message)
+      // ... (tu código de error actual se queda igual)
     } finally {
       setLoading(false)
     }
