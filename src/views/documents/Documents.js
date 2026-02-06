@@ -116,90 +116,77 @@ React.useEffect(() => {
   }
 
   const openEdit = (doc) => {
-    setEditing(doc)
-    setForm({ title: doc.title, description: doc.description || '', category: doc.category || '', file: null, user: doc.user })
-    setShowCreate(true)
-  }
+  setEditing(doc)
+  setForm({ 
+    title: doc.title, 
+    description: doc.description || '', 
+    category: doc.category || '', 
+    file: null, 
+    user: doc.user || doc.userName || doc.author_name,
+    projectId: doc.project_id || '' // ⚠️ FALTABA ESTO
+  })
+  setShowCreate(true)
+}
 
-const save = () => {
+const save = async () => {
   if (!form.title) {
     alert('El título es requerido')
     return
   }
-  if (editing) {
-    const updated = { 
-      ...editing, 
-      title: form.title, 
-      description: form.description, 
-      category: form.category, 
-      project_id: form.projectId, 
-      author_name: form.user, 
-      updated_at: new Date().toISOString() 
+  
+  try {
+    if (editing) {
+      // Editar documento existente
+      const updated = { 
+        title: form.title, 
+        description: form.description, 
+        category: form.category, 
+        project_id: form.projectId || null, 
+        author_name: form.user,
+        type: form.category || 'General'
+      }
+      
+      await documentsApi.updateDocument(editing.id, updated)
+    } else {
+      // Crear nuevo documento
+      const now = new Date().toISOString()
+      const newDoc = { 
+        project_id: form.projectId || null, 
+        title: form.title, 
+        author_name: form.user, 
+        type: form.category || 'General', 
+        description: form.description || '', 
+        file_url: '', 
+        created_at: now, 
+        updated_at: now 
+      }
+      
+      await documentsApi.createDocument(newDoc)
     }
-    documentsApi
-      .updateDocument(editing.id, updated)
-      .then(() => {
-        documentsApi.getDocuments(true).then((res) => {
-          const arr = res.data?.documents || []  // <-- CAMBIO AQUÍ
-          const normalized = arr.map((p) => ({
-            id: p.id,
-            title: p.title || '',
-            description: p.description || '',
-            category: p.type || p.category || '',
-            createdAt: p.created_at || p.createdAt || '',
-            updatedAt: p.updated_at || p.updatedAt || '',
-            userName: p.author_name || p.authorName || '',
-            user: p.author_name || p.authorName || '',
-            approved: p.approved || false,
-            author_id: p.author_id,
-            project_id: p.project_id,
-          }))
-          setDocuments(normalized)
-        })
-      })
-      .catch((err) => {
-        console.error('Error actualizando:', err)
-        alert('Error actualizando documento')
-      })
-  } else {
-    const now = new Date().toISOString()
-    const newDoc = { 
-      project_id: form.projectId || null, 
-      title: form.title, 
-      author_name: form.user, 
-      type: form.category || 'General', 
-      description: form.description || '', 
-      file_url: '', 
-      created_at: now, 
-      updated_at: now 
-    }
-    documentsApi
-      .createDocument(newDoc)
-      .then(() => {
-        documentsApi.getDocuments(true).then((res) => {
-          const arr = res.data?.documents || []  // <-- CAMBIO AQUÍ
-          const normalized = arr.map((p) => ({
-            id: p.id,
-            title: p.title || '',
-            description: p.description || '',
-            category: p.type || p.category || '',
-            createdAt: p.created_at || p.createdAt || '',
-            updatedAt: p.updated_at || p.updatedAt || '',
-            userName: p.author_name || p.authorName || '',
-            user: p.author_name || p.authorName || '',
-            approved: p.approved || false,
-            author_id: p.author_id,
-            project_id: p.project_id,
-          }))
-          setDocuments(normalized)
-        })
-      })
-      .catch((err) => {
-        console.error('Error creando:', err)
-        alert('Error creando documento')
-      })
+    
+    // Recargar documentos
+    const res = await documentsApi.getDocuments(true)
+    const arr = res.data?.documents || []
+    const normalized = arr.map((p) => ({
+      id: p.id,
+      title: p.title || '',
+      description: p.description || '',
+      category: p.type || p.category || '',
+      createdAt: p.created_at || p.createdAt || '',
+      updatedAt: p.updated_at || p.updatedAt || '',
+      userName: p.author_name || p.authorName || '',
+      user: p.author_name || p.authorName || '',
+      approved: p.approved || false,
+      author_id: p.author_id,
+      project_id: p.project_id,
+    }))
+    setDocuments(normalized)
+    setShowCreate(false)
+    
+  } catch (err) {
+    console.error('Error guardando:', err)
+    alert(`Error ${editing ? 'actualizando' : 'creando'} documento: ${err.message}`)
   }
-  setShowCreate(false)
 }
 
   const remove = (d) => {

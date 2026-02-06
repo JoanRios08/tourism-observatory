@@ -38,7 +38,9 @@ const Post = () => {
 	const [titleFilter, setTitleFilter] = useState('')
 	const [userFilter, setUserFilter] = useState('')
 	const [categoryFilter, setCategoryFilter] = useState('')
-
+	const [showEdit, setShowEdit] = useState(false)
+	const [editingPost, setEditingPost] = useState(null)
+	const [editForm, setEditForm] = useState({ user: '', title: '', category: '', content: '' })
 	const [showCreate, setShowCreate] = useState(false)
 	const [createForm, setCreateForm] = useState({ user: '', title: '', category: '', content: '' })
 
@@ -176,28 +178,95 @@ const Post = () => {
 		setCreateForm({ user: '', title: '', category: '', content: '' })
 	}
 
-	const handleDelete = (post) => {
+	const handleDelete = async (post) => {
 		if (!window.confirm(`¿Eliminar publicación "${post.title}"?`)) return
-		postsApi
-			.deletePost(post.id)
-			.then(() => setPosts((prev) => prev.filter((p) => (p.id ?? p.ID) !== post.id)))
-			.catch(() => alert('Error eliminando'))
+		
+		try {
+			await postsApi.deletePost(post.id)
+			setPosts((prev) => prev.filter((p) => (p.id ?? p.ID) !== post.id))
+		} catch (err) {
+			console.error('Error eliminando post:', err)
+			alert('Error eliminando publicación')
+		}
 	}
 
 	const handleEdit = (post) => {
-		alert(`Editar publicación: ${post.title} (id: ${post.id})`)
+		setEditingPost(post)
+		setEditForm({
+			user: post.user_id || post.author_id || '',
+			title: post.title || '',
+			category: post.category_id || post.category || '',
+			content: post.content || ''
+		})
+		setShowEdit(true)
 	}
-
-	const handleApprove = (post) => {
-		const payload = { status: 'approved', updated_at: new Date().toISOString() }
-		postsApi
-			.updatePost(post.id, payload)
-			.then((res) => {
-				const updated = res?.data ?? res
-				setPosts((prev) => prev.map((p) => ((p.id === (updated.id ?? updated.ID)) ? updated : p)))
-			})
-			.catch(() => alert('Error aprobando'))
+	const handleSaveEdit = async () => {
+		if (!editForm.title) {
+			alert('El título es obligatorio')
+			return
+		}
+		
+		try {
+			const payload = {
+				title: editForm.title,
+				content: editForm.content || '',
+				user_id: editForm.user || null,
+				category_id: editForm.category || null,
+				updated_at: new Date().toISOString()
+			}
+			
+			await postsApi.updatePost(editingPost.id, payload)
+			
+			// Recargar posts
+			const res = await postsApi.getPosts(true)
+			let data = res?.data
+			if (typeof data === 'string') {
+				data = JSON.parse(data)
+			}
+			
+			const arr = data?.posts || []
+			const normalized = arr.map((p) => ({
+				id: p.id ?? p.ID ?? null,
+				title: p.title ?? p.name ?? '',
+				content: p.content ?? p.body ?? '',
+				status: p.status ?? p.state ?? '',
+				created_at: p.created_at ?? p.createdAt ?? '',
+				updated_at: p.updated_at ?? p.updatedAt ?? '',
+				user_id: p.user_id ?? p.userId ?? p.author_id ?? p.authorId ?? null,
+				category_id: p.category_id ?? p.categoryId ?? p.category ?? null,
+				author_id: p.author_id ?? p.authorId ?? p.user_id ?? null,
+			}))
+			
+			setPosts(normalized)
+			setShowEdit(false)
+			setEditingPost(null)
+			
+		} catch (err) {
+			console.error('Error actualizando post:', err)
+			alert('Error actualizando publicación')
+		}
 	}
+	const handleApprove = async (post) => {
+	try {
+		const newStatus = post.status === 'approved' ? 'pending_approval' : 'approved'
+		
+		// Solo status
+		const payload = { status: newStatus }
+		
+		console.log('📤 Enviando:', payload)
+		
+		const res = await postsApi.updatePost(post.id, payload)
+		
+		setPosts((prev) => 
+			prev.map((p) => (p.id === post.id ? { ...p, status: newStatus } : p))
+		)
+		
+	} catch (err) {
+		console.error('❌ Error completo:', err)
+		console.error('❌ Response data:', err.response?.data)
+		alert('Error cambiando estado: ' + (err.response?.data?.message || err.message))
+	}
+}
 
 	return (
 		<>
@@ -286,9 +355,14 @@ const Post = () => {
 												<CButton size="sm" color="transparent" className="me-2 text-danger" title="Eliminar" onClick={() => handleDelete(p)}>
 													<CIcon icon={cilTrash} />
 												</CButton>
-												<CButton size="sm" color={p.status === 'approved' ? 'success' : 'transparent'} title="Aprobar" onClick={() => handleApprove(p)}>
-													<CIcon icon={cilCheck} />
-												</CButton>
+												<CButton 
+	size="sm" 
+	color={p.status === 'approved' ? 'success' : 'warning'} 
+	title={p.status === 'approved' ? 'Marcar como pendiente' : 'Aprobar'} 
+	onClick={() => handleApprove(p)}
+>
+	<CIcon icon={cilCheck} />
+</CButton>
 											</CTableDataCell>
 										</CTableRow>
 									))}
@@ -349,6 +423,56 @@ const Post = () => {
 					</CButton>
 					<CButton color="primary" onClick={handleSaveCreate}>
 						Crear
+					</CButton>
+				</CModalFooter>
+			</CModal>
+			<CModal visible={showEdit} onClose={() => setShowEdit(false)}>
+				<CModalHeader>
+					<CModalTitle>Editar publicación</CModalTitle>
+				</CModalHeader>
+				<CModalBody>
+					<CForm>
+						<div className="mb-3">
+							<CFormLabel>Usuario</CFormLabel>
+							<CFormSelect value={editForm.user} onChange={(e) => setEditForm({ ...editForm, user: e.target.value })}>
+								<option value="">Selecciona...</option>
+								{Object.entries(usersList || {}).map(([id, name]) => (
+									<option key={id} value={id}>
+										{name}
+									</option>
+								))}
+							</CFormSelect>
+						</div>
+
+						<div className="mb-3">
+							<CFormLabel>Título</CFormLabel>
+							<CFormInput value={editForm.title} onChange={(e) => setEditForm({ ...editForm, title: e.target.value })} />
+						</div>
+
+						<div className="mb-3">
+							<CFormLabel>Contenido</CFormLabel>
+							<CFormInput value={editForm.content} onChange={(e) => setEditForm({ ...editForm, content: e.target.value })} />
+						</div>
+
+						<div className="mb-3">
+							<CFormLabel>Categoría</CFormLabel>
+							<CFormSelect value={editForm.category} onChange={(e) => setEditForm({ ...editForm, category: e.target.value })}>
+								<option value="">Selecciona...</option>
+								{categories.map((c) => (
+									<option key={c} value={c}>
+										{c}
+									</option>
+								))}
+							</CFormSelect>
+						</div>
+					</CForm>
+				</CModalBody>
+				<CModalFooter>
+					<CButton color="secondary" onClick={() => setShowEdit(false)}>
+						Cancelar
+					</CButton>
+					<CButton color="primary" onClick={handleSaveEdit}>
+						Guardar cambios
 					</CButton>
 				</CModalFooter>
 			</CModal>
