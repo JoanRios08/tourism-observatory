@@ -66,7 +66,7 @@ const Login = () => {
         setError('No se recibió token de autenticación')
       }
     } catch (err) {
-      // ... (tu código de error actual se queda igual)
+      
     } finally {
       setLoading(false)
     }
