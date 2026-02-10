@@ -16,7 +16,7 @@ import { useNavigate } from 'react-router-dom'
 import { isAuthenticated, getToken } from '../../../utils/auth'
 import authApi from '../../../api/endpoints/authApi.js'
 import CIcon from '@coreui/icons-react'
-import { cilLockLocked, cilUser } from '@coreui/icons'
+import { cilLockLocked, cilUser, cilEnvelopeClosed } from '@coreui/icons'
 
 const Login = () => {
   const [flipped, setFlipped] = useState(false)
@@ -27,8 +27,6 @@ const Login = () => {
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
   const navigate = useNavigate()
-
-  
 
   const validateEmail = (e) => /^\S+@\S+\.\S+$/.test(e)
 
@@ -55,10 +53,10 @@ const Login = () => {
         }
 
         setSuccess('Inicio de sesión correcto. Redirigiendo...')
-        
-        // Un pequeño delay para que el usuario vea el mensaje de éxito antes del reload
-        setTimeout(() => {
-          navigate('/dashboard', { replace: true })
+         localStorage.setItem('authToken', token)
+    localStorage.setItem('userId', userId) 
+        navigate('/dashboard', { replace: true })
+        try {
           window.location.reload()
         }, 500)
 
@@ -66,7 +64,26 @@ const Login = () => {
         setError('No se recibió token de autenticación')
       }
     } catch (err) {
-      
+      console.error('[Login] auth error:', err)
+      console.error('Response data:', err?.response?.data)
+      console.error('Response status:', err?.response?.status)
+      const resp = err?.response?.data
+      const serverErr = resp?.error || resp?.message || err?.message || 'Error de autenticación'
+      let detailsText = ''
+      if (resp?.details && Array.isArray(resp.details)) {
+        detailsText = resp.details
+          .map((d) => {
+            if (!d) return ''
+            const path = d.path ? `${d.path}: ` : ''
+            const msg = d.message || (typeof d === 'string' ? d : JSON.stringify(d))
+            return `${path}${msg}`
+          })
+          .filter(Boolean)
+          .join(' — ')
+      }
+      const message = detailsText ? `${serverErr} — ${detailsText}` : serverErr
+      setError(message)
+      setTimeout(() => setError(''), 3000)
     } finally {
       setLoading(false)
     }
@@ -89,6 +106,7 @@ const Login = () => {
       console.error('[Recover] error:', err)
       const message = err?.response?.data?.message || 'Error al enviar el correo de recuperación'
       setError(message)
+      setTimeout(() => setError(''), 3000)
     } finally {
       setLoading(false)
     }
@@ -101,31 +119,69 @@ const Login = () => {
   }, [])
 
   return (
-    <div className="bg-body-tertiary min-vh-100 d-flex flex-row align-items-center login-animated">
+    <div className="login-wrapper">
+      {/* Animated background */}
+      <div className="login-background">
+        <div className="login-shape shape-1"></div>
+        <div className="login-shape shape-2"></div>
+        <div className="login-shape shape-3"></div>
+      </div>
+
       <CContainer>
-        <CRow className="justify-content-center">
-          <CCol md={6} lg={5}>
+        <CRow className="justify-content-center align-items-center min-vh-100">
+          <CCol md={8} lg={6} xl={5}>
+            <div className="login-header text-center mb-4">
+              <div className="login-logo-container">
+                <div className="login-logo-circle">
+                  <CIcon icon={cilLockLocked} size="xxl" />
+                </div>
+              </div>
+              <h2 className="login-welcome-text mt-3">Bienvenido</h2>
+            </div>
+
             <div className="flip-container">
               <div className={`flip-card ${flipped ? 'flipped' : ''}`}>
-                {/* Front Card */}
-                <CCard className="p-4 login-card flip-card-front">
-                  <CCardBody>
+                {/* Front Card - Login */}
+                <CCard className="login-card flip-card-front">
+                  <CCardBody className="p-5">
                     <CForm onSubmit={handleLogin}>
-                      {error && <CAlert color="danger">{error}</CAlert>}
-                      {success && <CAlert color="success">{success}</CAlert>}
-                      <h1>Iniciar sesión</h1>
-                      <p className="text-body-secondary">Accede a tu cuenta</p>
-                        <CInputGroup className="mb-3">
-                        <CInputGroupText>
+                      {error && (
+                        <CAlert color="danger" className="login-alert fade-in">
+                          <i className="bi bi-exclamation-circle me-2"></i>
+                          {error}
+                        </CAlert>
+                      )}
+                      {success && (
+                        <CAlert color="success" className="login-alert fade-in">
+                          <i className="bi bi-check-circle me-2"></i>
+                          {success}
+                        </CAlert>
+                      )}
+                      
+                      <div className="mb-4">
+                        <h3 className="login-card-title">Iniciar sesión</h3>
+                        <p className="login-card-subtitle">Accede a tu cuenta para continuar</p>
+                      </div>
+
+                      <CInputGroup className="login-input-group mb-4">
+                        <CInputGroupText className="login-input-icon">
                           <CIcon icon={cilUser} />
                         </CInputGroupText>
-                        <CFormInput value={username} onChange={(ev) => setUsername(ev.target.value)} placeholder="Usuario" autoComplete="username" />
+                        <CFormInput
+                          className="login-input"
+                          value={username}
+                          onChange={(ev) => setUsername(ev.target.value)}
+                          placeholder="Usuario"
+                          autoComplete="username"
+                        />
                       </CInputGroup>
-                        <CInputGroup className="mb-4">
-                        <CInputGroupText>
+
+                      <CInputGroup className="login-input-group mb-4">
+                        <CInputGroupText className="login-input-icon">
                           <CIcon icon={cilLockLocked} />
                         </CInputGroupText>
                         <CFormInput
+                          className="login-input"
                           type="password"
                           placeholder="Contraseña"
                           autoComplete="current-password"
@@ -133,54 +189,107 @@ const Login = () => {
                           onChange={(ev) => setPassword(ev.target.value)}
                         />
                       </CInputGroup>
-                      <CRow>
-                        <CCol xs={6}>
-                          <CButton color="primary" className="px-4" type="submit" disabled={loading}>
-                            {loading ? 'Cargando...' : 'Entrar'}
-                          </CButton>
-                        </CCol>
-                        <CCol xs={6} className="text-right">
-                          <CButton
-                            color="link"
-                            className="px-0"
-                            onClick={() => setFlipped(true)}
-                          >
-                            Recuperar contraseña
-                          </CButton>
-                        </CCol>
-                      </CRow>
+
+                      <CButton
+                        color="primary"
+                        className="login-submit-btn w-100 mb-3"
+                        type="submit"
+                        disabled={loading}
+                      >
+                        {loading ? (
+                          <>
+                            <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                            Cargando...
+                          </>
+                        ) : (
+                          'Entrar'
+                        )}
+                      </CButton>
+
+                      <div className="text-center">
+                        <CButton
+                          color="link"
+                          className="login-link-btn"
+                          onClick={() => setFlipped(true)}
+                        >
+                          ¿Olvidaste tu contraseña?
+                        </CButton>
+                      </div>
                     </CForm>
                   </CCardBody>
                 </CCard>
 
-                {/* Back Card */}
-                <CCard className="p-4 login-card flip-card-back">
-                  <CCardBody>
+                {/* Back Card - Password Recovery */}
+                <CCard className="login-card flip-card-back">
+                  <CCardBody className="p-5">
                     <CForm onSubmit={handleRecover}>
-                      {error && <CAlert color="danger">{error}</CAlert>}
-                      {success && <CAlert color="success">{success}</CAlert>}
-                      <h1>Recuperar contraseña</h1>
-                      <p className="text-body-secondary">Introduce tu correo para recuperar la contraseña</p>
-                      <CInputGroup className="mb-3">
-                        <CInputGroupText>@</CInputGroupText>
-                        <CFormInput value={email} onChange={(ev) => setEmail(ev.target.value)} type="email" placeholder="Correo electrónico" />
+                      {error && (
+                        <CAlert color="danger" className="login-alert fade-in">
+                          <i className="bi bi-exclamation-circle me-2"></i>
+                          {error}
+                        </CAlert>
+                      )}
+                      {success && (
+                        <CAlert color="success" className="login-alert fade-in">
+                          <i className="bi bi-check-circle me-2"></i>
+                          {success}
+                        </CAlert>
+                      )}
+                      
+                      <div className="mb-4">
+                        <h3 className="login-card-title">Recuperar contraseña</h3>
+                        <p className="login-card-subtitle">Introduce tu correo para recuperar el acceso</p>
+                      </div>
+
+                      <CInputGroup className="login-input-group mb-4">
+                        <CInputGroupText className="login-input-icon">
+                          <CIcon icon={cilEnvelopeClosed} />
+                        </CInputGroupText>
+                        <CFormInput
+                          className="login-input"
+                          value={email}
+                          onChange={(ev) => setEmail(ev.target.value)}
+                          type="email"
+                          placeholder="Correo electrónico"
+                        />
                       </CInputGroup>
-                      <CRow>
-                        <CCol xs={6}>
-                          <CButton color="primary" className="px-4" type="submit" disabled={loading}>
-                            {loading ? 'Enviando...' : 'Enviar'}
-                          </CButton>
-                        </CCol>
-                        <CCol xs={6} className="text-right">
-                          <CButton color="link" className="px-0" onClick={() => setFlipped(false)}>
-                            Volver
-                          </CButton>
-                        </CCol>
-                      </CRow>
+
+                      <CButton
+                        color="primary"
+                        className="login-submit-btn w-100 mb-3"
+                        type="submit"
+                        disabled={loading}
+                      >
+                        {loading ? (
+                          <>
+                            <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                            Enviando...
+                          </>
+                        ) : (
+                          'Enviar'
+                        )}
+                      </CButton>
+
+                      <div className="text-center">
+                        <CButton
+                          color="link"
+                          className="login-link-btn"
+                          onClick={() => setFlipped(false)}
+                        >
+                          <i className="bi bi-arrow-left me-2"></i>
+                          Volver al inicio de sesión
+                        </CButton>
+                      </div>
                     </CForm>
                   </CCardBody>
                 </CCard>
               </div>
+            </div>
+
+            <div className="login-footer text-center mt-4">
+              <p className="login-footer-text">
+                © 2026 Observatorio UNEFA. Todos los derechos reservados.
+              </p>
             </div>
           </CCol>
         </CRow>

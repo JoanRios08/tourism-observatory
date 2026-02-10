@@ -19,6 +19,7 @@ import {
 } from '@coreui/react'
 import { CChartDoughnut, CChartBar } from '@coreui/react-chartjs'
 
+
 const Dashboard = () => {
   const [projects, setProjects] = useState([])
   const [documents, setDocuments] = useState([])
@@ -52,7 +53,6 @@ const Dashboard = () => {
     fetchAll()
   }, [])
 
-  
   const monthsEsp = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic']
 
   const getLastNMonths = (n = 6) => {
@@ -68,8 +68,9 @@ const Dashboard = () => {
   const last6 = getLastNMonths(6)
 
   const barCounts = last6.map((m) => projects.filter((p) => {
-    if (!p.createdAt) return false
-    const d = new Date(p.createdAt)
+    const createdAt = p.created_at || p.createdAt
+    if (!createdAt) return false
+    const d = new Date(createdAt)
     return d.getMonth() === m.month && d.getFullYear() === m.year
   }).length)
 
@@ -101,19 +102,37 @@ const Dashboard = () => {
     ],
   }
 
-  const latestProjects = projects.slice(0, 3).map((p) => ({ id: p.id, name: p.title, owner: p.userName || '', date: p.createdAt, status: p.status || 'Publicado' }))
+  const latestProjects = projects.slice(0, 3).map((p) => ({
+    id: p.id,
+    name: p.title || p.name,
+    owner: p.userName || p.user_name || p.author_name || '',
+    date: p.created_at || p.createdAt,
+    status: p.status || 'Publicado'
+  }))
 
   const latestDocuments = documents.slice(0, 3).map((d) => {
-    const project = projects.find((pr) => pr.id === d.projectId)
-    const type = d.fileName ? d.fileName.split('.').pop().toUpperCase() : 'FILE'
-    return { id: d.id, title: d.title, type, project: project ? project.title : d.projectId, date: d.createdAt }
+    const project = projects.find((pr) => pr.id === (d.project_id || d.projectId))
+    const fileName = d.file_name || d.fileName || d.file_url || ''
+    const type = fileName ? fileName.split('.').pop().toUpperCase() : 'FILE'
+    return {
+      id: d.id,
+      title: d.title,
+      type,
+      project: project ? (project.title || project.name) : (d.project_id || d.projectId || 'N/A'),
+      date: d.created_at || d.createdAt
+    }
   })
 
-  const latestUsers = users.slice(0, 3).map((u) => ({ id: u.id, name: u.fullName || `${u.nombre} ${u.apellido}`, email: u.email, role: u.rol || 'Usuario', date: u.createdAt }))
+  const latestUsers = users.slice(0, 3).map((u) => ({
+    id: u.id,
+    name: u.fullName || `${u.first_name || u.nombre || ''} ${u.last_name || u.apellido || ''}`.trim(),
+    email: u.email,
+    role: u.rol || u.role || u.role_name || 'Usuario',
+    date: u.created_at || u.createdAt
+  }))
 
   return (
     <>
-      
       <CCard className="mb-4">
         <CCardBody className="p-0">
           <CCarousel controls indicators>
@@ -122,7 +141,7 @@ const Dashboard = () => {
               <CCarouselCaption className="text-start d-none d-md-block py-4 px-5">
                 <h4>Sube y comparte una nueva línea de proyecto aquí</h4>
                 <p className="text-body-secondary">Comparte tus iniciativas con la comunidad del observatorio.</p>
-                <CButton color="primary" href="/projects/new">Subir proyecto</CButton>
+                <CButton color="primary" href="#/projects">Ver proyectos</CButton>
               </CCarouselCaption>
             </CCarouselItem>
             <CCarouselItem>
@@ -130,7 +149,7 @@ const Dashboard = () => {
               <CCarouselCaption className="text-start d-none d-md-block py-4 px-5">
                 <h4>Respalda tus documentos aquí</h4>
                 <p className="text-body-secondary">Carga y guarda informes, manuales y recursos importantes.</p>
-                <CButton color="info" href="/documents/upload">Respaldar documentos</CButton>
+                <CButton color="info" href="#/documents">Ver documentos</CButton>
               </CCarouselCaption>
             </CCarouselItem>
             <CCarouselItem>
@@ -138,7 +157,7 @@ const Dashboard = () => {
               <CCarouselCaption className="text-start d-none d-md-block py-4 px-5">
                 <h4>Crea usuarios y expande la comunidad</h4>
                 <p className="text-body-secondary">Invita colaboradores, asigna roles y amplía el equipo.</p>
-                <CButton color="success" href="/users/new">Crear usuario</CButton>
+                <CButton color="success" href="#/users">Ver usuarios</CButton>
               </CCarouselCaption>
             </CCarouselItem>
           </CCarousel>
@@ -163,25 +182,10 @@ const Dashboard = () => {
                 </CCol>
               </CRow>
             </CCarouselItem>
-            <CCarouselItem>
-              <CRow>
-                <CCol md={6} className="d-flex align-items-center justify-content-center">
-                  <div style={{ width: '320px' }}>
-                    <CChartDoughnut data={{ ...donutData, datasets: [{ ...donutData.datasets[0], data: [30,30,25,15] }] }} />
-                  </div>
-                </CCol>
-                <CCol md={6} className="d-flex align-items-center justify-content-center">
-                  <div style={{ width: '100%' }}>
-                    <CChartBar data={{ ...barData, datasets: [{ ...barData.datasets[0], data: [200,150,240,300,260,350] }] }} options={{ maintainAspectRatio: false }} style={{ height: '320px' }} />
-                  </div>
-                </CCol>
-              </CRow>
-            </CCarouselItem>
           </CCarousel>
         </CCardBody>
       </CCard>
 
-      
       <CCard className="mb-4">
         <CCardHeader>Últimos proyectos subidos</CCardHeader>
         <CCardBody>
@@ -210,7 +214,6 @@ const Dashboard = () => {
         </CCardBody>
       </CCard>
 
-      
       <CCard className="mb-4">
         <CCardHeader>Últimos documentos agregados</CCardHeader>
         <CCardBody>
@@ -239,7 +242,6 @@ const Dashboard = () => {
         </CCardBody>
       </CCard>
 
-      
       <CCard className="mb-4">
         <CCardHeader>Últimos usuarios registrados</CCardHeader>
         <CCardBody>

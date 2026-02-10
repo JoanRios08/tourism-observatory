@@ -1,39 +1,22 @@
-import React, { useEffect, useRef } from 'react'
-import { NavLink } from 'react-router-dom'
+import React, { useEffect, useRef, useState } from 'react'
 import { useSelector, useDispatch } from 'react-redux'
 import {
   CContainer,
-  CDropdown,
-  CDropdownItem,
-  CDropdownMenu,
-  CDropdownToggle,
   CHeader,
   CHeaderNav,
   CHeaderToggler,
-  CNavLink,
-  CNavItem,
-  useColorModes,
+  CButton,
 } from '@coreui/react'
 import CIcon from '@coreui/icons-react'
-import {
-  cilBell,
-  cilContrast,
-  cilEnvelopeOpen,
-  cilList,
-  cilMenu,
-  cilMoon,
-  cilSun,
-} from '@coreui/icons'
-
+import { cilMenu, cilAccountLogout } from '@coreui/icons'
 import { AppBreadcrumb } from './index'
-import { AppHeaderDropdown } from './header/index'
+import axiosClient from '../api/axiosClient'
 
 const AppHeader = () => {
   const headerRef = useRef()
-  const { colorMode, setColorMode } = useColorModes('coreui-free-react-admin-template-theme')
-
   const dispatch = useDispatch()
   const sidebarShow = useSelector((state) => state.sidebarShow)
+  const [userName, setUserName] = useState('Usuario')
 
   useEffect(() => {
     const handleScroll = () => {
@@ -45,6 +28,38 @@ const AppHeader = () => {
     return () => document.removeEventListener('scroll', handleScroll)
   }, [])
 
+  useEffect(() => {
+    // Obtener información del usuario actual
+    const loadUser = async () => {
+      try {
+        const res = await axiosClient.get('/users')
+        
+        // Extraer datos manejando diferentes estructuras
+        const data = res?.data
+        const users = data?.users || (Array.isArray(data) ? data : [])
+        
+        if (users.length > 0) {
+          const user = users[0]
+          const fullName = user?.fullName || 
+                          `${user?.first_name || user?.nombre || ''} ${user?.last_name || user?.apellido || ''}`.trim()
+          setUserName(fullName || 'Usuario')
+        }
+      } catch (err) {
+        console.error('Error cargando usuario:', err)
+        setUserName('Usuario')
+      }
+    }
+
+    loadUser()
+  }, [])
+
+  const handleLogout = () => {
+    localStorage.removeItem('authToken')
+    localStorage.removeItem('userId')
+    window.location.hash = '#/login'
+    window.location.reload()
+  }
+
   return (
     <CHeader position="sticky" className="mb-4 p-0" ref={headerRef}>
       <CContainer className="border-bottom px-4" fluid>
@@ -54,84 +69,27 @@ const AppHeader = () => {
         >
           <CIcon icon={cilMenu} size="lg" />
         </CHeaderToggler>
-        <CHeaderNav className="d-none d-md-flex">
-          <CNavItem>
-            <CNavLink to="/dashboard" as={NavLink}>
-              Dashboard
-            </CNavLink>
-          </CNavItem>
-          <CNavItem>
-            <CNavLink href="#">Users</CNavLink>
-          </CNavItem>
-          <CNavItem>
-            <CNavLink href="#">Settings</CNavLink>
-          </CNavItem>
-        </CHeaderNav>
-        <CHeaderNav className="ms-auto">
-          <CNavItem>
-            <CNavLink href="#">
-              <CIcon icon={cilBell} size="lg" />
-            </CNavLink>
-          </CNavItem>
-          <CNavItem>
-            <CNavLink href="#">
-              <CIcon icon={cilList} size="lg" />
-            </CNavLink>
-          </CNavItem>
-          <CNavItem>
-            <CNavLink href="#">
-              <CIcon icon={cilEnvelopeOpen} size="lg" />
-            </CNavLink>
-          </CNavItem>
-        </CHeaderNav>
+        
+        {/* Lado izquierdo - Botón de cerrar sesión */}
         <CHeaderNav>
-          <li className="nav-item py-1">
-            <div className="vr h-100 mx-2 text-body text-opacity-75"></div>
-          </li>
-          <CDropdown variant="nav-item" placement="bottom-end">
-            <CDropdownToggle caret={false}>
-              {colorMode === 'dark' ? (
-                <CIcon icon={cilMoon} size="lg" />
-              ) : colorMode === 'auto' ? (
-                <CIcon icon={cilContrast} size="lg" />
-              ) : (
-                <CIcon icon={cilSun} size="lg" />
-              )}
-            </CDropdownToggle>
-            <CDropdownMenu>
-              <CDropdownItem
-                active={colorMode === 'light'}
-                className="d-flex align-items-center"
-                as="button"
-                type="button"
-                onClick={() => setColorMode('light')}
-              >
-                <CIcon className="me-2" icon={cilSun} size="lg" /> Light
-              </CDropdownItem>
-              <CDropdownItem
-                active={colorMode === 'dark'}
-                className="d-flex align-items-center"
-                as="button"
-                type="button"
-                onClick={() => setColorMode('dark')}
-              >
-                <CIcon className="me-2" icon={cilMoon} size="lg" /> Dark
-              </CDropdownItem>
-              <CDropdownItem
-                active={colorMode === 'auto'}
-                className="d-flex align-items-center"
-                as="button"
-                type="button"
-                onClick={() => setColorMode('auto')}
-              >
-                <CIcon className="me-2" icon={cilContrast} size="lg" /> Auto
-              </CDropdownItem>
-            </CDropdownMenu>
-          </CDropdown>
-          <li className="nav-item py-1">
-            <div className="vr h-100 mx-2 text-body text-opacity-75"></div>
-          </li>
-          <AppHeaderDropdown />
+          <CButton 
+            color="danger" 
+            variant="ghost" 
+            onClick={handleLogout}
+            className="d-flex align-items-center"
+          >
+            <CIcon icon={cilAccountLogout} size="lg" className="me-2" />
+            Cerrar sesión
+          </CButton>
+        </CHeaderNav>
+
+        {/* Lado derecho - Nombre del usuario */}
+        <CHeaderNav className="ms-auto">
+          <div className="d-flex align-items-center px-3">
+            <span style={{ fontWeight: 600, fontSize: '1rem' }}>
+              {userName}
+            </span>
+          </div>
         </CHeaderNav>
       </CContainer>
       <CContainer className="px-4" fluid>
