@@ -39,27 +39,30 @@ const Login = () => {
 
     setLoading(true)
     try {
-      // 1. Guardamos la respuesta del login en una constante
+      
       const response = await authApi.login({ username, password })
       
       const token = getToken()
       if (token) {
-        // 2. GUARDAR DATOS DEL USUARIO EN LOCALSTORAGE
-        // Dependiendo de cómo responda tu API, el usuario suele venir en response.user o response.data.user
+        
         const userData = response.user || response.data?.user;
         
         if (userData) {
           localStorage.setItem('user', JSON.stringify(userData))
         }
 
-        setSuccess('Inicio de sesión correcto. Redirigiendo...')
-         localStorage.setItem('authToken', token)
-    localStorage.setItem('userId', userId) 
-        navigate('/dashboard', { replace: true })
-        try {
-          window.location.reload()
-        }, 500)
+       setSuccess('Inicio de sesión correcto. Redirigiendo...')
+localStorage.setItem('authToken', token)
+localStorage.setItem('userId', userId)
 
+setTimeout(() => {
+  navigate('/dashboard', { replace: true })
+  try {
+    window.location.reload()
+  } catch (e) {
+    // ignore
+  }
+}, 500)
       } else {
         setError('No se recibió token de autenticación')
       }
