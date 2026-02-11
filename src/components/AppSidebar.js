@@ -6,7 +6,7 @@ import { CSidebar, CSidebarBrand, CSidebarNav, CSidebarToggler } from '@coreui/r
 import { AppSidebarNav } from './AppSidebarNav'
 
 // Importación de tu logo
-import observatorioLogo from 'src/assets/images/observatorio.jpg'
+import observatorioLogo from 'src/assets/images/logo.png'
 
 import navigation from '../_nav'
 
