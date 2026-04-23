@@ -1,135 +1,97 @@
 import React, { useEffect, useState } from 'react'
 import axiosClient from '../../api/axiosClient'
 import {
-  CRow,
-  CCol,
+  CAlert,
+  CButton,
   CCard,
   CCardBody,
   CCardHeader,
-  CTable,
-  CTableHead,
-  CTableBody,
-  CTableRow,
-  CTableHeaderCell,
-  CTableDataCell,
   CCarousel,
-  CCarouselItem,
   CCarouselCaption,
-  CButton,
+  CCarouselItem,
+  CCol,
+  CRow,
+  CSpinner,
+  CTable,
+  CTableBody,
+  CTableDataCell,
+  CTableHead,
+  CTableHeaderCell,
+  CTableRow,
+  CWidgetStatsF,
 } from '@coreui/react'
-import { CChartDoughnut, CChartBar } from '@coreui/react-chartjs'
+import { CChartBar, CChartDoughnut } from '@coreui/react-chartjs'
+import { formatDate } from '../../utils/observatoryAdapters'
 
+const emptySummary = {
+  stats: {
+    totalDocuments: 0,
+    totalProjects: 0,
+    totalUsers: 0,
+  },
+  recentActivity: {
+    lastProjects: [],
+    lastDocuments: [],
+    lastLogins: [],
+  },
+  charts: {
+    barChart: [],
+    donutChart: [],
+  },
+}
 
 const Dashboard = () => {
-  const [projects, setProjects] = useState([])
-  const [documents, setDocuments] = useState([])
-  const [users, setUsers] = useState([])
+  const [summary, setSummary] = useState(emptySummary)
   const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
 
   useEffect(() => {
-    const fetchAll = async () => {
+    const loadSummary = async () => {
       setLoading(true)
+      setError('')
+
       try {
-        const [pRes, dRes, uRes] = await Promise.all([
-          axiosClient.get('/projects'),
-          axiosClient.get('/documents'),
-          axiosClient.get('/users'),
-        ])
-        const pData = pRes?.data ?? pRes
-        const dData = dRes?.data ?? dRes
-        const uData = uRes?.data ?? uRes
-        setProjects(Array.isArray(pData) ? pData : (pData?.data ?? []))
-        setDocuments(Array.isArray(dData) ? dData : (dData?.data ?? []))
-        setUsers(Array.isArray(uData) ? uData : (uData?.data ?? []))
-      } catch (err) {
-        console.error('Dashboard fetch error', err)
-        setProjects([])
-        setDocuments([])
-        setUsers([])
+        const { data } = await axiosClient.get('/dashboard/summary')
+        setSummary(data || emptySummary)
+      } catch (fetchError) {
+        console.error('Dashboard fetch error', fetchError)
+        setSummary(emptySummary)
+        setError('No se pudo cargar el resumen del dashboard.')
       } finally {
         setLoading(false)
       }
     }
-    fetchAll()
+
+    loadSummary()
   }, [])
 
-  const monthsEsp = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic']
+  const stats = summary.stats || emptySummary.stats
+  const recentActivity = summary.recentActivity || emptySummary.recentActivity
+  const charts = summary.charts || emptySummary.charts
 
-  const getLastNMonths = (n = 6) => {
-    const result = []
-    const now = new Date()
-    for (let i = n - 1; i >= 0; i--) {
-      const d = new Date(now.getFullYear(), now.getMonth() - i, 1)
-      result.push({ month: d.getMonth(), year: d.getFullYear(), label: monthsEsp[d.getMonth()] })
-    }
-    return result
+  const donutChart = charts.donutChart || []
+  const barChart = charts.barChart || []
+
+  const donutData = {
+    labels: donutChart.map((item) => item.label || 'Sin tipo'),
+    datasets: [
+      {
+        data: donutChart.map((item) => Number(item.value) || 0),
+        backgroundColor: ['#1f4b99', '#ff7a00', '#0d9488', '#b45309', '#475569', '#dc2626'],
+      },
+    ],
   }
 
-  const last6 = getLastNMonths(6)
-
-  const barCounts = last6.map((m) => projects.filter((p) => {
-    const createdAt = p.created_at || p.createdAt
-    if (!createdAt) return false
-    const d = new Date(createdAt)
-    return d.getMonth() === m.month && d.getFullYear() === m.year
-  }).length)
-
   const barData = {
-    labels: last6.map((m) => m.label),
+    labels: barChart.map((item) => item.month || ''),
     datasets: [
       {
         label: 'Proyectos por mes',
-        backgroundColor: '#3e8ef7',
-        data: barCounts,
+        backgroundColor: '#1f4b99',
+        data: barChart.map((item) => Number(item.total) || 0),
       },
     ],
   }
-
-  const categoryCounts = projects.reduce((acc, p) => {
-    const cat = p.category || 'Sin categoría'
-    acc[cat] = (acc[cat] || 0) + 1
-    return acc
-  }, {})
-
-  const donutData = {
-    labels: Object.keys(categoryCounts),
-    datasets: [
-      {
-        data: Object.values(categoryCounts),
-        backgroundColor: ['#3e8ef7', '#7c3aed', '#ffb020', '#06b6d4', '#f97316', '#10b981'],
-        hoverBackgroundColor: ['#2f6fe0', '#6a2bd6', '#e6a200', '#05a0b0', '#c85a08', '#0e9b6f'],
-      },
-    ],
-  }
-
-  const latestProjects = projects.slice(0, 3).map((p) => ({
-    id: p.id,
-    name: p.title || p.name,
-    owner: p.userName || p.user_name || p.author_name || '',
-    date: p.created_at || p.createdAt,
-    status: p.status || 'Publicado'
-  }))
-
-  const latestDocuments = documents.slice(0, 3).map((d) => {
-    const project = projects.find((pr) => pr.id === (d.project_id || d.projectId))
-    const fileName = d.file_name || d.fileName || d.file_url || ''
-    const type = fileName ? fileName.split('.').pop().toUpperCase() : 'FILE'
-    return {
-      id: d.id,
-      title: d.title,
-      type,
-      project: project ? (project.title || project.name) : (d.project_id || d.projectId || 'N/A'),
-      date: d.created_at || d.createdAt
-    }
-  })
-
-  const latestUsers = users.slice(0, 3).map((u) => ({
-    id: u.id,
-    name: u.fullName || `${u.first_name || u.nombre || ''} ${u.last_name || u.apellido || ''}`.trim(),
-    email: u.email,
-    role: u.rol || u.role || u.role_name || 'Usuario',
-    date: u.created_at || u.createdAt
-  }))
 
   return (
     <>
@@ -137,76 +99,106 @@ const Dashboard = () => {
         <CCardBody className="p-0">
           <CCarousel controls indicators>
             <CCarouselItem>
-              <div className="d-block w-100 quick-slide slide-1" style={{ minHeight: 160 }} />
+              <div className="d-block w-100 quick-slide slide-1" style={{ minHeight: 180 }} />
               <CCarouselCaption className="text-start d-none d-md-block py-4 px-5">
-                <h4>Sube y comparte una nueva línea de proyecto aquí</h4>
-                <p className="text-body-secondary">Comparte tus iniciativas con la comunidad del observatorio.</p>
-                <CButton color="primary" href="#/projects">Ver proyectos</CButton>
+                <h4>El dashboard ahora usa el resumen consolidado del backend</h4>
+                <p className="text-body-secondary">
+                  Las métricas, actividad reciente y gráficos salen de `/dashboard/summary`.
+                </p>
+                <CButton color="primary" href="#/projects">
+                  Ir a proyectos
+                </CButton>
               </CCarouselCaption>
             </CCarouselItem>
             <CCarouselItem>
-              <div className="d-block w-100 quick-slide slide-2" style={{ minHeight: 160 }} />
+              <div className="d-block w-100 quick-slide slide-2" style={{ minHeight: 180 }} />
               <CCarouselCaption className="text-start d-none d-md-block py-4 px-5">
-                <h4>Respalda tus documentos aquí</h4>
-                <p className="text-body-secondary">Carga y guarda informes, manuales y recursos importantes.</p>
-                <CButton color="info" href="#/documents">Ver documentos</CButton>
+                <h4>Documentos y autores alineados con la API real</h4>
+                <p className="text-body-secondary">
+                  La vista usa `type`, `author_id`, `project_id` y las fechas tal como las entrega
+                  el backend.
+                </p>
+                <CButton color="info" href="#/documents">
+                  Ir a documentos
+                </CButton>
               </CCarouselCaption>
             </CCarouselItem>
             <CCarouselItem>
-              <div className="d-block w-100 quick-slide slide-3" style={{ minHeight: 160 }} />
+              <div className="d-block w-100 quick-slide slide-3" style={{ minHeight: 180 }} />
               <CCarouselCaption className="text-start d-none d-md-block py-4 px-5">
-                <h4>Crea usuarios y expande la comunidad</h4>
-                <p className="text-body-secondary">Invita colaboradores, asigna roles y amplía el equipo.</p>
-                <CButton color="success" href="#/users">Ver usuarios</CButton>
+                <h4>Usuarios y proyectos con formularios compatibles</h4>
+                <p className="text-body-secondary">
+                  Se removieron supuestos de mock y ahora el frontend envía los campos que el
+                  backend valida.
+                </p>
+                <CButton color="success" href="#/users">
+                  Ir a usuarios
+                </CButton>
               </CCarouselCaption>
-            </CCarouselItem>
-          </CCarousel>
-        </CCardBody>
-      </CCard>
-     
-      <CCard className="mb-4">
-        <CCardHeader>Resumen rápido</CCardHeader>
-        <CCardBody>
-          <CCarousel>
-            <CCarouselItem>
-              <CRow>
-                <CCol md={6} className="d-flex align-items-center justify-content-center">
-                  <div style={{ width: '320px' }}>
-                    <CChartDoughnut data={donutData} />
-                  </div>
-                </CCol>
-                <CCol md={6} className="d-flex align-items-center justify-content-center">
-                  <div style={{ width: '100%' }}>
-                    <CChartBar data={barData} options={{ maintainAspectRatio: false }} style={{ height: '320px' }} />
-                  </div>
-                </CCol>
-              </CRow>
             </CCarouselItem>
           </CCarousel>
         </CCardBody>
       </CCard>
 
+      {error ? <CAlert color="warning">{error}</CAlert> : null}
+
+      <CRow className="mb-4">
+        <CCol sm={4}>
+          <CWidgetStatsF title="Usuarios" value={String(stats.totalUsers || 0)} />
+        </CCol>
+        <CCol sm={4}>
+          <CWidgetStatsF title="Proyectos" value={String(stats.totalProjects || 0)} />
+        </CCol>
+        <CCol sm={4}>
+          <CWidgetStatsF title="Documentos" value={String(stats.totalDocuments || 0)} />
+        </CCol>
+      </CRow>
+
       <CCard className="mb-4">
-        <CCardHeader>Últimos proyectos subidos</CCardHeader>
+        <CCardHeader>Resumen rápido</CCardHeader>
+        <CCardBody>
+          {loading ? (
+            <div className="text-center py-5">
+              <CSpinner />
+            </div>
+          ) : (
+            <CRow>
+              <CCol md={6} className="mb-4 mb-md-0">
+                <div style={{ maxWidth: 360, margin: '0 auto' }}>
+                  <CChartDoughnut data={donutData} />
+                </div>
+              </CCol>
+              <CCol md={6}>
+                <div style={{ height: 320 }}>
+                  <CChartBar data={barData} options={{ maintainAspectRatio: false }} />
+                </div>
+              </CCol>
+            </CRow>
+          )}
+        </CCardBody>
+      </CCard>
+
+      <CCard className="mb-4">
+        <CCardHeader>Últimos proyectos</CCardHeader>
         <CCardBody>
           <CTable hover responsive>
             <CTableHead>
               <CTableRow>
                 <CTableHeaderCell>ID</CTableHeaderCell>
                 <CTableHeaderCell>Nombre</CTableHeaderCell>
-                <CTableHeaderCell>Propietario</CTableHeaderCell>
-                <CTableHeaderCell>Fecha</CTableHeaderCell>
+                <CTableHeaderCell>Autor</CTableHeaderCell>
                 <CTableHeaderCell>Estado</CTableHeaderCell>
+                <CTableHeaderCell>Creado</CTableHeaderCell>
               </CTableRow>
             </CTableHead>
             <CTableBody>
-              {latestProjects.map((p) => (
-                <CTableRow key={p.id}>
-                  <CTableDataCell>{p.id}</CTableDataCell>
-                  <CTableDataCell>{p.name}</CTableDataCell>
-                  <CTableDataCell>{p.owner}</CTableDataCell>
-                  <CTableDataCell>{p.date}</CTableDataCell>
-                  <CTableDataCell>{p.status}</CTableDataCell>
+              {recentActivity.lastProjects.map((project) => (
+                <CTableRow key={project.id}>
+                  <CTableDataCell>{project.id}</CTableDataCell>
+                  <CTableDataCell>{project.name}</CTableDataCell>
+                  <CTableDataCell>{project.author_name || 'Sin autor'}</CTableDataCell>
+                  <CTableDataCell>{project.status || 'active'}</CTableDataCell>
+                  <CTableDataCell>{formatDate(project.created_at)}</CTableDataCell>
                 </CTableRow>
               ))}
             </CTableBody>
@@ -215,7 +207,7 @@ const Dashboard = () => {
       </CCard>
 
       <CCard className="mb-4">
-        <CCardHeader>Últimos documentos agregados</CCardHeader>
+        <CCardHeader>Últimos documentos</CCardHeader>
         <CCardBody>
           <CTable hover responsive>
             <CTableHead>
@@ -223,18 +215,20 @@ const Dashboard = () => {
                 <CTableHeaderCell>ID</CTableHeaderCell>
                 <CTableHeaderCell>Título</CTableHeaderCell>
                 <CTableHeaderCell>Tipo</CTableHeaderCell>
-                <CTableHeaderCell>Proyecto</CTableHeaderCell>
-                <CTableHeaderCell>Fecha</CTableHeaderCell>
+                <CTableHeaderCell>Autor</CTableHeaderCell>
+                <CTableHeaderCell>Publicado</CTableHeaderCell>
               </CTableRow>
             </CTableHead>
             <CTableBody>
-              {latestDocuments.map((d) => (
-                <CTableRow key={d.id}>
-                  <CTableDataCell>{d.id}</CTableDataCell>
-                  <CTableDataCell>{d.title}</CTableDataCell>
-                  <CTableDataCell>{d.type}</CTableDataCell>
-                  <CTableDataCell>{d.project}</CTableDataCell>
-                  <CTableDataCell>{d.date}</CTableDataCell>
+              {recentActivity.lastDocuments.map((document) => (
+                <CTableRow key={document.id}>
+                  <CTableDataCell>{document.id}</CTableDataCell>
+                  <CTableDataCell>{document.title}</CTableDataCell>
+                  <CTableDataCell>{document.type}</CTableDataCell>
+                  <CTableDataCell>{document.author_name || 'Sin autor'}</CTableDataCell>
+                  <CTableDataCell>
+                    {formatDate(document.published_at || document.created_at)}
+                  </CTableDataCell>
                 </CTableRow>
               ))}
             </CTableBody>
@@ -243,7 +237,7 @@ const Dashboard = () => {
       </CCard>
 
       <CCard className="mb-4">
-        <CCardHeader>Últimos usuarios registrados</CCardHeader>
+        <CCardHeader>Últimos usuarios</CCardHeader>
         <CCardBody>
           <CTable hover responsive>
             <CTableHead>
@@ -252,17 +246,19 @@ const Dashboard = () => {
                 <CTableHeaderCell>Nombre</CTableHeaderCell>
                 <CTableHeaderCell>Email</CTableHeaderCell>
                 <CTableHeaderCell>Rol</CTableHeaderCell>
-                <CTableHeaderCell>Fecha registro</CTableHeaderCell>
+                <CTableHeaderCell>Registrado</CTableHeaderCell>
               </CTableRow>
             </CTableHead>
             <CTableBody>
-              {latestUsers.map((u) => (
-                <CTableRow key={u.id}>
-                  <CTableDataCell>{u.id}</CTableDataCell>
-                  <CTableDataCell>{u.name}</CTableDataCell>
-                  <CTableDataCell>{u.email}</CTableDataCell>
-                  <CTableDataCell>{u.role}</CTableDataCell>
-                  <CTableDataCell>{u.date}</CTableDataCell>
+              {recentActivity.lastLogins.map((user) => (
+                <CTableRow key={user.id}>
+                  <CTableDataCell>{user.id}</CTableDataCell>
+                  <CTableDataCell>
+                    {user.name || [user.first_name, user.last_name].filter(Boolean).join(' ')}
+                  </CTableDataCell>
+                  <CTableDataCell>{user.email}</CTableDataCell>
+                  <CTableDataCell>{user.role_name || 'Usuario'}</CTableDataCell>
+                  <CTableDataCell>{formatDate(user.created_at)}</CTableDataCell>
                 </CTableRow>
               ))}
             </CTableBody>
