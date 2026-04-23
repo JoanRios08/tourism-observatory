@@ -1,309 +1,394 @@
-import React, { useMemo, useState, useEffect } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import {
-  CRow,
-  CCol,
-  CCard,
-  CCardHeader,
-  CCardBody,
+  CAlert,
+  CBadge,
   CButton,
-  CInputGroup,
+  CCard,
+  CCardBody,
+  CCardHeader,
+  CCol,
   CFormInput,
+  CFormLabel,
   CFormSelect,
+  CFormTextarea,
+  CInputGroup,
   CModal,
-  CModalHeader,
-  CModalTitle,
   CModalBody,
   CModalFooter,
-  CForm,
-  CFormLabel,
-  CFormTextarea,
+  CModalHeader,
+  CModalTitle,
+  CRow,
+  CSpinner,
   CTable,
-  CTableHead,
   CTableBody,
-  CTableRow,
-  CTableHeaderCell,
   CTableDataCell,
-  CBadge,
-  CCardImage,
+  CTableHead,
+  CTableHeaderCell,
+  CTableRow,
 } from '@coreui/react'
-import { CChartBar, CChartLine } from '@coreui/react-chartjs'
 import CIcon from '@coreui/icons-react'
-import { cilPencil, cilTrash, cilCheck } from '@coreui/icons'
+import { cilPencil, cilTrash } from '@coreui/icons'
+import authorsApi from '../../api/endpoints/authorsApi'
+import projectsApi from '../../api/endpoints/projectsApi'
+import { extractCollection, formatDate, normalizeProject } from '../../utils/observatoryAdapters'
+
+const initialForm = {
+  name: '',
+  description: '',
+  status: 'active',
+  start_date: '',
+  end_date: '',
+  author_id: '',
+}
+
+const statusColor = {
+  active: 'success',
+  completed: 'primary',
+  suspended: 'warning',
+}
 
 const Projects = () => {
-  const [usersList, setUsersList] = useState(['María López', 'Carlos Ruiz', 'Ana Gómez'])
   const [projects, setProjects] = useState([])
+  const [authors, setAuthors] = useState([])
   const [loading, setLoading] = useState(false)
+  const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+  const [search, setSearch] = useState('')
+  const [statusFilter, setStatusFilter] = useState('')
+  const [authorFilter, setAuthorFilter] = useState('')
+  const [modalVisible, setModalVisible] = useState(false)
+  const [editingId, setEditingId] = useState(null)
+  const [form, setForm] = useState(initialForm)
 
-  const base = (import.meta?.env?.VITE_API_BASE) || window.__API_BASE__ || ''
+  const loadData = async () => {
+    setLoading(true)
+    setError('')
+
+    try {
+      const [projectsResponse, authorsResponse] = await Promise.all([
+        projectsApi.getProjects(),
+        authorsApi.getAuthors(),
+      ])
+
+      const authorItems = extractCollection(authorsResponse.data, ['authors'])
+      const authorNameById = new Map(authorItems.map((author) => [author.id, author.name || '']))
+
+      const projectItems = extractCollection(projectsResponse.data, ['projects']).map((project) =>
+        normalizeProject({
+          ...project,
+          author_name: project.author_name || authorNameById.get(project.author_id) || '',
+        }),
+      )
+
+      setAuthors(authorItems)
+      setProjects(projectItems)
+    } catch (fetchError) {
+      console.error('Error loading projects', fetchError)
+      setProjects([])
+      setAuthors([])
+      setError('No se pudieron cargar los proyectos.')
+    } finally {
+      setLoading(false)
+    }
+  }
 
   useEffect(() => {
-    const fetchData = async () => {
-      setLoading(true)
-      try {
-        const [uRes, pRes] = await Promise.all([
-          fetch(`${base}/users?_sort=createdAt&_order=desc`),
-          fetch(`${base}/projects?_sort=createdAt&_order=desc`),
-        ])
-        const [uData, pData] = await Promise.all([uRes.json(), pRes.json()])
-        setUsersList(uData.map((u) => u.fullName || `${u.nombre} ${u.apellido}`))
-        setProjects(
-          pData.map((p) => ({ id: p.id, user: p.userName || '', title: p.title, category: p.category || '', createdAt: p.createdAt || '', updatedAt: p.updatedAt || '' })),
-        )
-      } catch (err) {
-        setError('Error cargando datos de proyectos')
-      } finally {
-        setLoading(false)
-      }
-    }
-    fetchData()
+    loadData()
   }, [])
-  const [titleFilter, setTitleFilter] = useState('')
-  const [userFilter, setUserFilter] = useState('')
-  const [dateFilter, setDateFilter] = useState('')
 
-  const [showCreate, setShowCreate] = useState(false)
-  const [createForm, setCreateForm] = useState({ title: '', description: '', category: '', status: 'Borrador', image: null, user: usersList[0] })
-
-  
-  const barData = {
-    labels: ['Semana 1', 'Semana 2', 'Semana 3', 'Semana 4'],
-    datasets: [
-      { label: 'Proyectos subidos', backgroundColor: '#3e8ef7', data: [2, 5, 3, 4] },
-    ],
-  }
-
-  const lineData = {
-    labels: ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'],
-    datasets: [
-      { label: 'Proyectos esta semana', backgroundColor: 'rgba(62,142,247,0.2)', borderColor: '#3e8ef7', data: [0, 1, 2, 1, 3, 0, 2], fill: true },
-    ],
-  }
+  const filteredProjects = useMemo(() => {
+    return projects.filter((project) => {
+      const q = search.trim().toLowerCase()
+      const matchesSearch =
+        !q || project.name.toLowerCase().includes(q) || project.authorName.toLowerCase().includes(q)
+      const matchesStatus = !statusFilter || project.status === statusFilter
+      const matchesAuthor = !authorFilter || String(project.author_id) === authorFilter
+      return matchesSearch && matchesStatus && matchesAuthor
+    })
+  }, [authorFilter, projects, search, statusFilter])
 
   const latestProject = projects[0]
 
-  const filtered = useMemo(() => {
-    return projects.filter((p) => {
-      const matchTitle = titleFilter ? p.title.toLowerCase().includes(titleFilter.toLowerCase()) : true
-      const matchUser = userFilter ? p.user === userFilter : true
-      const matchDate = dateFilter ? p.createdAt === dateFilter : true
-      return matchTitle && matchUser && matchDate
+  const openCreate = () => {
+    setEditingId(null)
+    setForm({ ...initialForm, author_id: authors[0]?.id ? String(authors[0].id) : '' })
+    setModalVisible(true)
+  }
+
+  const openEdit = (project) => {
+    setEditingId(project.id)
+    setForm({
+      name: project.name || '',
+      description: project.description || '',
+      status: project.status || 'active',
+      start_date: project.startDate || '',
+      end_date: project.endDate || '',
+      author_id: project.author_id ? String(project.author_id) : '',
     })
-  }, [projects, titleFilter, userFilter, dateFilter])
+    setModalVisible(true)
+  }
 
-  const handleCreate = () => setShowCreate(true)
+  const closeModal = () => {
+    setModalVisible(false)
+    setEditingId(null)
+    setForm(initialForm)
+  }
 
-  const handleSaveCreate = async () => {
-    if (!createForm.title) {
-      alert('El título es requerido')
+  const saveProject = async () => {
+    if (!form.name.trim() || !form.author_id) {
+      alert('Nombre y autor son obligatorios.')
       return
     }
-    const id = `P-${Math.floor(1000 + Math.random() * 9000)}`
-    const now = new Date().toISOString().slice(0, 10)
-    
+
+    const payload = {
+      name: form.name.trim(),
+      description: form.description.trim(),
+      status: form.status,
+      start_date: form.start_date || undefined,
+      end_date: form.end_date || undefined,
+      author_id: Number(form.author_id),
+    }
+
+    setSaving(true)
     try {
-      const usersRes = await fetch(`${base}/users`)
-      const usersData = await usersRes.json()
-      const matched = usersData.find((u) => (u.fullName || `${u.nombre} ${u.apellido}`) === createForm.user)
-      const payload = {
-        id,
-        title: createForm.title,
-        category: createForm.category || 'General',
-        userId: matched ? matched.id : null,
-        userName: createForm.user,
-        createdAt: now,
-        updatedAt: now,
+      if (editingId) {
+        await projectsApi.updateProject(editingId, payload)
+      } else {
+        await projectsApi.createProject(payload)
       }
-      const res = await fetch(`${base}/projects`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      })
-      if (!res.ok) throw new Error('Error creando proyecto')
-      const created = await res.json()
-      setProjects((prev) => [ { id: created.id, user: created.userName, title: created.title, category: created.category, createdAt: created.createdAt, updatedAt: created.updatedAt }, ...prev ])
-      setShowCreate(false)
-      setCreateForm({ title: '', description: '', category: '', status: 'Borrador', image: null, user: usersList[0] })
-    } catch (err) {
-      alert('No se pudo crear el proyecto')
+      closeModal()
+      await loadData()
+    } catch (saveError) {
+      console.error('Error saving project', saveError)
+      alert('No se pudo guardar el proyecto.')
+    } finally {
+      setSaving(false)
     }
   }
 
-  const handleDelete = async (p) => {
-    if (!window.confirm('Eliminar proyecto?')) return
+  const removeProject = async (project) => {
+    if (!window.confirm(`Eliminar proyecto "${project.name}"?`)) return
+
     try {
-      const res = await fetch(`${base}/projects/${encodeURIComponent(p.id)}`, { method: 'DELETE' })
-      if (!res.ok) throw new Error('Error eliminando')
-      setProjects((prev) => prev.filter((x) => x.id !== p.id))
-    } catch (err) {
-      alert('No se pudo eliminar el proyecto')
+      await projectsApi.deleteProject(project.id)
+      setProjects((current) => current.filter((item) => item.id !== project.id))
+    } catch (deleteError) {
+      console.error('Error deleting project', deleteError)
+      alert('No se pudo eliminar el proyecto.')
     }
   }
-
-  const handleEdit = (p) => alert(`Editar proyecto ${p.title}`)
-  const handleApprove = (p) => alert(`Aprobar proyecto ${p.title}`)
 
   return (
     <>
-      <CRow className="mb-4">
-        <CCol xs={12}>
-          <CCard>
-            <CCardBody className="p-3">
-              <CRow className="align-items-center">
-                <CCol md={7} className="mb-3 mb-md-0">
-                  <CCard className="h-100">
-                    <CCardBody>
-                      <h6 className="text-muted">Proyectos por semana</h6>
-                      <CChartBar data={barData} />
-                    </CCardBody>
-                  </CCard>
-                </CCol>
-                <CCol md={5}>
-                  <CCard className="mb-3">
-                    <CCardBody>
-                      <h6 className="text-muted">Actividad semanal</h6>
-                      <CChartLine data={lineData} />
-                    </CCardBody>
-                  </CCard>
-                  <CCard>
-                    <CCardBody>
-                      <h6 className="text-muted">Último proyecto agregado</h6>
-                      <div style={{ fontWeight: 700, fontSize: 18 }}>{latestProject ? latestProject.title : 'Sin proyectos'}</div>
-                      {latestProject && <div className="text-muted small">Creado: {latestProject.createdAt}</div>}
-                    </CCardBody>
-                  </CCard>
-                </CCol>
-              </CRow>
-            </CCardBody>
-          </CCard>
-        </CCol>
-      </CRow>
+      {error ? <CAlert color="warning">{error}</CAlert> : null}
 
       <CRow className="mb-4">
-        <CCol xs={12}>
-          <CCard>
-            <CCardHeader>
-              <CRow className="align-items-center">
-                <CCol md={8} className="d-flex gap-2 align-items-end">
-                  <div style={{ width: '36%' }}>
-                    <CFormLabel>Buscar por título</CFormLabel>
-                    <CInputGroup>
-                      <CFormInput placeholder="Título" value={titleFilter} onChange={(e) => setTitleFilter(e.target.value)} />
-                    </CInputGroup>
-                  </div>
-                  <div style={{ width: '28%' }}>
-                    <CFormLabel>Usuario</CFormLabel>
-                    <CFormSelect value={userFilter} onChange={(e) => setUserFilter(e.target.value)}>
-                      <option value="">Todos</option>
-                      {usersList.map((u) => (
-                        <option key={u} value={u}>
-                          {u}
-                        </option>
-                      ))}
-                    </CFormSelect>
-                  </div>
-                  <div style={{ width: '28%' }}>
-                    <CFormLabel>Fecha (creado)</CFormLabel>
-                    <CFormInput type="date" value={dateFilter} onChange={(e) => setDateFilter(e.target.value)} />
-                  </div>
-                </CCol>
-                <CCol md={4} className="d-flex justify-content-end">
-                  <CButton color="primary" onClick={handleCreate}>
-                    Crear nuevo proyecto
-                  </CButton>
-                </CCol>
-              </CRow>
-            </CCardHeader>
+        <CCol xl={8}>
+          <CCard className="h-100">
             <CCardBody>
-              <CTable hover responsive>
-                <CTableHead>
-                  <CTableRow>
-                    <CTableHeaderCell>ID</CTableHeaderCell>
-                    <CTableHeaderCell>Usuario</CTableHeaderCell>
-                    <CTableHeaderCell>Título</CTableHeaderCell>
-                    <CTableHeaderCell>Creado</CTableHeaderCell>
-                    <CTableHeaderCell>Editado</CTableHeaderCell>
-                    <CTableHeaderCell style={{ width: 140 }}>Acciones</CTableHeaderCell>
-                  </CTableRow>
-                </CTableHead>
-                <CTableBody>
-                  {filtered.map((p) => (
-                    <CTableRow key={p.id} className="align-middle">
-                      <CTableDataCell>{p.id}</CTableDataCell>
-                      <CTableDataCell>{p.user}</CTableDataCell>
-                      <CTableDataCell style={{ fontWeight: 700 }}>{p.title}</CTableDataCell>
-                      <CTableDataCell>{p.createdAt}</CTableDataCell>
-                      <CTableDataCell>{p.updatedAt}</CTableDataCell>
-                      <CTableDataCell>
-                        <CButton size="sm" color="transparent" className="me-2" title="Editar" onClick={() => handleEdit(p)}>
-                          <CIcon icon={cilPencil} />
-                        </CButton>
-                        <CButton size="sm" color="transparent" className="me-2 text-danger" title="Eliminar" onClick={() => handleDelete(p)}>
-                          <CIcon icon={cilTrash} />
-                        </CButton>
-                        <CButton size="sm" color="transparent" title="Aprobar" onClick={() => handleApprove(p)}>
-                          <CIcon icon={cilCheck} />
-                        </CButton>
-                      </CTableDataCell>
-                    </CTableRow>
-                  ))}
-                </CTableBody>
-              </CTable>
+              <div className="text-medium-emphasis mb-2">Resumen de proyectos</div>
+              <h3 className="mb-2">{projects.length} proyectos cargados</h3>
+              <p className="mb-0 text-body-secondary">
+                Esta vista ahora trabaja con `name`, `author_id`, `status`, `start_date` y
+                `end_date`, que son los campos que valida el backend.
+              </p>
+            </CCardBody>
+          </CCard>
+        </CCol>
+        <CCol xl={4}>
+          <CCard className="h-100">
+            <CCardBody>
+              <div className="text-medium-emphasis mb-2">Último proyecto</div>
+              <h5 className="mb-1">{latestProject?.name || 'Sin proyectos'}</h5>
+              <div className="small text-body-secondary">
+                {latestProject
+                  ? `${latestProject.authorName || 'Sin autor'} • ${formatDate(latestProject.created_at)}`
+                  : 'Aún no hay registros'}
+              </div>
             </CCardBody>
           </CCard>
         </CCol>
       </CRow>
 
-      <CModal visible={showCreate} onClose={() => setShowCreate(false)}>
+      <CCard className="mb-4">
+        <CCardHeader>
+          <CRow className="align-items-end g-3">
+            <CCol md={4}>
+              <CFormLabel>Buscar</CFormLabel>
+              <CInputGroup>
+                <CFormInput
+                  placeholder="Nombre o autor"
+                  value={search}
+                  onChange={(event) => setSearch(event.target.value)}
+                />
+              </CInputGroup>
+            </CCol>
+            <CCol md={3}>
+              <CFormLabel>Estado</CFormLabel>
+              <CFormSelect
+                value={statusFilter}
+                onChange={(event) => setStatusFilter(event.target.value)}
+              >
+                <option value="">Todos</option>
+                <option value="active">Activo</option>
+                <option value="completed">Completado</option>
+                <option value="suspended">Suspendido</option>
+              </CFormSelect>
+            </CCol>
+            <CCol md={3}>
+              <CFormLabel>Autor</CFormLabel>
+              <CFormSelect
+                value={authorFilter}
+                onChange={(event) => setAuthorFilter(event.target.value)}
+              >
+                <option value="">Todos</option>
+                {authors.map((author) => (
+                  <option key={author.id} value={author.id}>
+                    {author.name}
+                  </option>
+                ))}
+              </CFormSelect>
+            </CCol>
+            <CCol md={2} className="d-flex justify-content-end">
+              <CButton color="primary" onClick={openCreate}>
+                Crear proyecto
+              </CButton>
+            </CCol>
+          </CRow>
+        </CCardHeader>
+        <CCardBody>
+          {loading ? (
+            <div className="text-center py-5">
+              <CSpinner />
+            </div>
+          ) : (
+            <CTable hover responsive>
+              <CTableHead>
+                <CTableRow>
+                  <CTableHeaderCell>ID</CTableHeaderCell>
+                  <CTableHeaderCell>Nombre</CTableHeaderCell>
+                  <CTableHeaderCell>Autor</CTableHeaderCell>
+                  <CTableHeaderCell>Estado</CTableHeaderCell>
+                  <CTableHeaderCell>Inicio</CTableHeaderCell>
+                  <CTableHeaderCell>Fin</CTableHeaderCell>
+                  <CTableHeaderCell>Actualizado</CTableHeaderCell>
+                  <CTableHeaderCell style={{ width: 120 }}>Acciones</CTableHeaderCell>
+                </CTableRow>
+              </CTableHead>
+              <CTableBody>
+                {filteredProjects.map((project) => (
+                  <CTableRow key={project.id}>
+                    <CTableDataCell>{project.id}</CTableDataCell>
+                    <CTableDataCell>{project.name}</CTableDataCell>
+                    <CTableDataCell>{project.authorName || 'Sin autor'}</CTableDataCell>
+                    <CTableDataCell>
+                      <CBadge color={statusColor[project.status] || 'secondary'}>
+                        {project.status}
+                      </CBadge>
+                    </CTableDataCell>
+                    <CTableDataCell>{formatDate(project.start_date)}</CTableDataCell>
+                    <CTableDataCell>{formatDate(project.end_date)}</CTableDataCell>
+                    <CTableDataCell>{project.updatedLabel}</CTableDataCell>
+                    <CTableDataCell>
+                      <CButton
+                        size="sm"
+                        color="transparent"
+                        className="me-2"
+                        onClick={() => openEdit(project)}
+                      >
+                        <CIcon icon={cilPencil} />
+                      </CButton>
+                      <CButton
+                        size="sm"
+                        color="transparent"
+                        className="text-danger"
+                        onClick={() => removeProject(project)}
+                      >
+                        <CIcon icon={cilTrash} />
+                      </CButton>
+                    </CTableDataCell>
+                  </CTableRow>
+                ))}
+              </CTableBody>
+            </CTable>
+          )}
+        </CCardBody>
+      </CCard>
+
+      <CModal visible={modalVisible} onClose={closeModal}>
         <CModalHeader>
-          <CModalTitle>Crear proyecto</CModalTitle>
+          <CModalTitle>{editingId ? 'Editar proyecto' : 'Crear proyecto'}</CModalTitle>
         </CModalHeader>
         <CModalBody>
+          <div className="mb-3">
+            <CFormLabel>Nombre</CFormLabel>
+            <CFormInput
+              value={form.name}
+              onChange={(event) => setForm({ ...form, name: event.target.value })}
+            />
+          </div>
+          <div className="mb-3">
+            <CFormLabel>Descripción</CFormLabel>
+            <CFormTextarea
+              rows={4}
+              value={form.description}
+              onChange={(event) => setForm({ ...form, description: event.target.value })}
+            />
+          </div>
+          <div className="mb-3">
+            <CFormLabel>Autor</CFormLabel>
+            <CFormSelect
+              value={form.author_id}
+              onChange={(event) => setForm({ ...form, author_id: event.target.value })}
+            >
+              <option value="">Seleccione un autor</option>
+              {authors.map((author) => (
+                <option key={author.id} value={author.id}>
+                  {author.name}
+                </option>
+              ))}
+            </CFormSelect>
+          </div>
+          <div className="mb-3">
+            <CFormLabel>Estado</CFormLabel>
+            <CFormSelect
+              value={form.status}
+              onChange={(event) => setForm({ ...form, status: event.target.value })}
+            >
+              <option value="active">Activo</option>
+              <option value="completed">Completado</option>
+              <option value="suspended">Suspendido</option>
+            </CFormSelect>
+          </div>
           <CRow>
-            <CCol md={7}>
-              <CForm>
-                <div className="mb-3">
-                  <CFormLabel>Título</CFormLabel>
-                  <CFormInput value={createForm.title} onChange={(e) => setCreateForm({ ...createForm, title: e.target.value })} />
-                </div>
-                <div className="mb-3">
-                  <CFormLabel>Descripción</CFormLabel>
-                  <CFormTextarea rows={4} value={createForm.description} onChange={(e) => setCreateForm({ ...createForm, description: e.target.value })} />
-                </div>
-                <div className="mb-3">
-                  <CFormLabel>Categoría</CFormLabel>
-                  <CFormInput value={createForm.category} onChange={(e) => setCreateForm({ ...createForm, category: e.target.value })} />
-                </div>
-                <div className="mb-3">
-                  <CFormLabel>Estado</CFormLabel>
-                  <CFormSelect value={createForm.status} onChange={(e) => setCreateForm({ ...createForm, status: e.target.value })}>
-                    <option>Borrador</option>
-                    <option>Publicado</option>
-                  </CFormSelect>
-                </div>
-              </CForm>
+            <CCol md={6}>
+              <div className="mb-3">
+                <CFormLabel>Fecha de inicio</CFormLabel>
+                <CFormInput
+                  type="date"
+                  value={form.start_date}
+                  onChange={(event) => setForm({ ...form, start_date: event.target.value })}
+                />
+              </div>
             </CCol>
-            <CCol md={5}>
-              <CCard>
-                <CCardHeader>Imágenes</CCardHeader>
-                <CCardBody className="d-flex flex-column align-items-center justify-content-center" style={{ minHeight: 220 }}>
-                  <CCardImage src="/assets/images/avatars/1.jpg" style={{ width: 160, height: 120, objectFit: 'cover', borderRadius: 6 }} />
-                  <div className="mt-3 w-100">
-                    <CFormLabel>Subir imágenes</CFormLabel>
-                    <CFormInput type="file" onChange={(e) => setCreateForm({ ...createForm, image: e.target.files[0] })} />
-                  </div>
-                </CCardBody>
-              </CCard>
+            <CCol md={6}>
+              <div className="mb-3">
+                <CFormLabel>Fecha de fin</CFormLabel>
+                <CFormInput
+                  type="date"
+                  value={form.end_date}
+                  onChange={(event) => setForm({ ...form, end_date: event.target.value })}
+                />
+              </div>
             </CCol>
           </CRow>
         </CModalBody>
         <CModalFooter>
-          <CButton color="secondary" onClick={() => setShowCreate(false)}>
+          <CButton color="secondary" onClick={closeModal}>
             Cancelar
           </CButton>
-          <CButton color="primary" onClick={handleSaveCreate}>
-            Crear
+          <CButton color="primary" disabled={saving} onClick={saveProject}>
+            {saving ? 'Guardando...' : 'Guardar'}
           </CButton>
         </CModalFooter>
       </CModal>

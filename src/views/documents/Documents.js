@@ -1,368 +1,415 @@
-import React, { useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import {
-  CRow,
-  CCol,
+  CAlert,
+  CButton,
   CCard,
   CCardBody,
   CCardHeader,
-  CCarousel,
-  CCarouselItem,
-  CCarouselCaption,
-  CButton,
-  CInputGroup,
+  CCol,
   CFormInput,
-  CFormSelect,
   CFormLabel,
+  CFormSelect,
+  CFormTextarea,
+  CInputGroup,
   CModal,
-  CModalHeader,
-  CModalTitle,
   CModalBody,
   CModalFooter,
-  CFormTextarea,
+  CModalHeader,
+  CModalTitle,
+  CRow,
+  CSpinner,
   CTable,
-  CTableHead,
   CTableBody,
-  CTableRow,
-  CTableHeaderCell,
   CTableDataCell,
-  CBadge,
+  CTableHead,
+  CTableHeaderCell,
+  CTableRow,
 } from '@coreui/react'
 import CIcon from '@coreui/icons-react'
-import { cilPencil, cilTrash, cilCheck } from '@coreui/icons'
+import { cilPencil, cilTrash } from '@coreui/icons'
 import documentsApi from '../../api/endpoints/documentsApi'
+import projectsApi from '../../api/endpoints/projectsApi'
+import userApi from '../../api/endpoints/usersApi'
+import {
+  extractCollection,
+  getUserDisplayName,
+  normalizeDocument,
+  normalizeProject,
+  normalizeUser,
+} from '../../utils/observatoryAdapters'
+
+const initialForm = {
+  title: '',
+  description: '',
+  type: '',
+  file_url: '',
+  author_id: '',
+  project_id: '',
+  published_at: '',
+}
 
 const Documents = () => {
   const [documents, setDocuments] = useState([])
-  const [titleFilter, setTitleFilter] = useState('')
-  const [userFilter, setUserFilter] = useState('')
-  const [dateFilter, setDateFilter] = useState('')
-  const [usersList, setUsersList] = useState([])
-  const [projectsList, setProjectsList] = useState([])
-  const [showCreate, setShowCreate] = useState(false)
-  const [editing, setEditing] = useState(null)
-  const [form, setForm] = useState({ title: '', description: '', category: '', file: null, user: '', projectId: '' })
+  const [projects, setProjects] = useState([])
+  const [users, setUsers] = useState([])
+  const [loading, setLoading] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
+  const [search, setSearch] = useState('')
+  const [typeFilter, setTypeFilter] = useState('')
+  const [authorFilter, setAuthorFilter] = useState('')
+  const [modalVisible, setModalVisible] = useState(false)
+  const [editingId, setEditingId] = useState(null)
+  const [form, setForm] = useState(initialForm)
 
-  const lastDocument = documents.length ? documents[0] : null
+  const loadData = async () => {
+    setLoading(true)
+    setError('')
 
-
-  const documentsThisWeek = documents.filter((d) => d.created_at && d.created_at.startsWith(new Date().getFullYear().toString())).length
-
-React.useEffect(() => {
-  const load = async () => {
     try {
-      const docsRes = await documentsApi.getDocuments(true)
-      console.log('📦 Respuesta completa:', docsRes)
-      
-      // axios devuelve los datos en docsRes.data
-      const rawData = docsRes.data
-      console.log('📋 Raw data:', rawData)
-      
-      // El backend devuelve { ok: true, documents: [...] }
-      const arr = rawData?.documents || []
-      console.log('✅ Array final:', arr)
-      
-      const normalized = arr.map((p) => {
-        const createdAt = p.created_at || p.createdAt || ''
-        const updatedAt = p.updated_at || p.updatedAt || ''
-        const authorName = p.author_name || p.authorName || ''
-        const category = p.type || p.category || ''
-        
-        return {
-          id: p.id,
-          title: p.title || p.name || '',
-          description: p.description || p.desc || '',
-          category,
-          published_at: p.published_at || p.publishedAt || '',
-          file_url: p.file_url || p.fileUrl || p.file || '',
-          author_id: p.author_id ?? p.authorId ?? p.user_id ?? null,
-          project_id: p.project_id ?? p.projectId ?? null,
-          location_id: p.location_id ?? p.locationId ?? null,
-          created_at: createdAt,
-          updated_at: updatedAt,
-          createdAt,
-          updatedAt,
-          author_name: authorName,
-          userName: authorName,
-          user: authorName,
-          approved: p.approved || false
-        }
-      })
-      
-      console.log('🎯 Documentos normalizados:', normalized)
-      setDocuments(normalized)
-    } catch (e) {
-      console.error('❌ Error loading documents:', e)
+      const [documentsResponse, projectsResponse, usersResponse] = await Promise.all([
+        documentsApi.getDocuments(true),
+        projectsApi.getProjects(),
+        userApi.getUsers(),
+      ])
+
+      const userItems = extractCollection(usersResponse.data, ['users']).map(normalizeUser)
+      const projectItems = extractCollection(projectsResponse.data, ['projects']).map(
+        normalizeProject,
+      )
+      const projectsById = new Map(projectItems.map((project) => [project.id, project]))
+      const usersById = new Map(userItems.map((user) => [user.id, user]))
+
+      const documentItems = extractCollection(documentsResponse.data, ['documents']).map(
+        (document) => normalizeDocument(document, projectsById, usersById),
+      )
+
+      setUsers(userItems)
+      setProjects(projectItems)
+      setDocuments(documentItems)
+    } catch (fetchError) {
+      console.error('Error loading documents', fetchError)
+      setUsers([])
+      setProjects([])
       setDocuments([])
+      setError('No se pudieron cargar los documentos.')
+    } finally {
+      setLoading(false)
     }
-
-    // ... resto del código
   }
-  load()
-}, [])
 
-  const filtered = useMemo(() => {
-    return documents.filter((d) => {
-      const matchTitle = titleFilter ? d.title.toLowerCase().includes(titleFilter.toLowerCase()) : true
-      const matchUser = userFilter ? d.user === userFilter : true
-      const matchDate = dateFilter ? d.createdAt === dateFilter : true
-      return matchTitle && matchUser && matchDate
+  useEffect(() => {
+    loadData()
+  }, [])
+
+  const filteredDocuments = useMemo(() => {
+    return documents.filter((document) => {
+      const q = search.trim().toLowerCase()
+      const matchesSearch =
+        !q ||
+        document.title.toLowerCase().includes(q) ||
+        document.authorName.toLowerCase().includes(q) ||
+        document.projectName.toLowerCase().includes(q)
+      const matchesType = !typeFilter || document.type === typeFilter
+      const matchesAuthor = !authorFilter || String(document.author_id) === authorFilter
+      return matchesSearch && matchesType && matchesAuthor
     })
-  }, [documents, titleFilter, userFilter, dateFilter])
+  }, [authorFilter, documents, search, typeFilter])
+
+  const typeOptions = [...new Set(documents.map((document) => document.type).filter(Boolean))]
+  const latestDocument = documents[0]
 
   const openCreate = () => {
-    setEditing(null)
-    setForm({ title: '', description: '', category: '', file: null, user: usersList[0] || '', projectId: projectsList[0]?.id || '' })
-    setShowCreate(true)
+    setEditingId(null)
+    setForm({ ...initialForm, author_id: users[0]?.id ? String(users[0].id) : '' })
+    setModalVisible(true)
   }
 
-  const openEdit = (doc) => {
-  setEditing(doc)
-  setForm({ 
-    title: doc.title, 
-    description: doc.description || '', 
-    category: doc.category || '', 
-    file: null, 
-    user: doc.user || doc.userName || doc.author_name,
-    projectId: doc.project_id || '' // ⚠️ FALTABA ESTO
-  })
-  setShowCreate(true)
-}
-
-const save = async () => {
-  if (!form.title) {
-    alert('El título es requerido')
-    return
+  const openEdit = (document) => {
+    setEditingId(document.id)
+    setForm({
+      title: document.title || '',
+      description: document.description || '',
+      type: document.type || '',
+      file_url: document.file_url || '',
+      author_id: document.author_id ? String(document.author_id) : '',
+      project_id: document.project_id ? String(document.project_id) : '',
+      published_at: document.published_at
+        ? new Date(document.published_at).toISOString().slice(0, 10)
+        : '',
+    })
+    setModalVisible(true)
   }
-  
-  try {
-    if (editing) {
-      // Editar documento existente
-      const updated = { 
-        title: form.title, 
-        description: form.description, 
-        category: form.category, 
-        project_id: form.projectId || null, 
-        author_name: form.user,
-        type: form.category || 'General'
-      }
-      
-      await documentsApi.updateDocument(editing.id, updated)
-    } else {
-      // Crear nuevo documento
-      const now = new Date().toISOString()
-      const newDoc = { 
-        project_id: form.projectId || null, 
-        title: form.title, 
-        author_name: form.user, 
-        type: form.category || 'General', 
-        description: form.description || '', 
-        file_url: '', 
-        created_at: now, 
-        updated_at: now 
-      }
-      
-      await documentsApi.createDocument(newDoc)
+
+  const closeModal = () => {
+    setModalVisible(false)
+    setEditingId(null)
+    setForm(initialForm)
+  }
+
+  const saveDocument = async () => {
+    if (!form.title.trim() || !form.type.trim() || !form.author_id) {
+      alert('Título, tipo y autor son obligatorios.')
+      return
     }
-    
-    // Recargar documentos
-    const res = await documentsApi.getDocuments(true)
-    const arr = res.data?.documents || []
-    const normalized = arr.map((p) => ({
-      id: p.id,
-      title: p.title || '',
-      description: p.description || '',
-      category: p.type || p.category || '',
-      createdAt: p.created_at || p.createdAt || '',
-      updatedAt: p.updated_at || p.updatedAt || '',
-      userName: p.author_name || p.authorName || '',
-      user: p.author_name || p.authorName || '',
-      approved: p.approved || false,
-      author_id: p.author_id,
-      project_id: p.project_id,
-    }))
-    setDocuments(normalized)
-    setShowCreate(false)
-    
-  } catch (err) {
-    console.error('Error guardando:', err)
-    alert(`Error ${editing ? 'actualizando' : 'creando'} documento: ${err.message}`)
-  }
-}
 
-  const remove = (d) => {
-    if (!window.confirm(`Eliminar documento ${d.title}?`)) return
-    documentsApi
-      .deleteDocument(d.id)
-      .then(() => setDocuments((prev) => prev.filter((x) => x.id !== d.id)))
-      .catch(() => alert('Error eliminando'))
+    if (!editingId && !form.file_url.trim()) {
+      alert('El backend requiere una URL de archivo para crear documentos.')
+      return
+    }
+
+    const payload = {
+      title: form.title.trim(),
+      description: form.description.trim(),
+      type: form.type.trim(),
+      author_id: Number(form.author_id),
+      project_id: form.project_id ? Number(form.project_id) : undefined,
+      published_at: form.published_at || undefined,
+      ...(form.file_url.trim() ? { file_url: form.file_url.trim() } : {}),
+    }
+
+    setSaving(true)
+    try {
+      if (editingId) {
+        await documentsApi.updateDocument(editingId, payload)
+      } else {
+        await documentsApi.createDocument(payload)
+      }
+      closeModal()
+      await loadData()
+    } catch (saveError) {
+      console.error('Error saving document', saveError)
+      alert('No se pudo guardar el documento.')
+    } finally {
+      setSaving(false)
+    }
   }
-  const approve = (d) => {
-    documentsApi
-      .updateDocument(d.id, { approved: !d.approved })
-      .then((res) => {
-        const updated = res?.data ?? res
-        setDocuments((prev) => prev.map((x) => (x.id === (updated.id ?? updated.ID) ? updated : x)))
-      })
-      .catch(() => alert('Error actualizando estado'))
+
+  const removeDocument = async (document) => {
+    if (!window.confirm(`Eliminar documento "${document.title}"?`)) return
+
+    try {
+      await documentsApi.deleteDocument(document.id)
+      setDocuments((current) => current.filter((item) => item.id !== document.id))
+    } catch (deleteError) {
+      console.error('Error deleting document', deleteError)
+      alert('No se pudo eliminar el documento.')
+    }
   }
 
   return (
     <>
-      <CRow className="mb-4">
-        <CCol xs={12}>
-          <CCard>
-            <CCardBody className="p-3">
-              <CCarousel controls indicators>
-                <CCarouselItem>
-                  <div className="d-flex w-100 align-items-center justify-content-center" style={{ minHeight: 160 }}>
-                    <div style={{ textAlign: 'center' }}>
-                      <h5 className="mb-1">Último documento subido</h5>
-                          <div style={{ fontWeight: 700 }}>{lastDocument ? lastDocument.title : 'Sin documentos'}</div>
-                          {lastDocument && <div className="text-muted small">Subido por {lastDocument.userName || lastDocument.user} • {lastDocument.createdAt}</div>}
-                    </div>
-                  </div>
-                </CCarouselItem>
-                <CCarouselItem>
-                  <div className="d-flex w-100 align-items-center justify-content-center" style={{ minHeight: 160 }}>
-                    <div style={{ textAlign: 'center' }}>
-                        <h5 className="mb-1">Documentos esta semana</h5>
-                        <div style={{ fontWeight: 700, fontSize: 24 }}>{documentsThisWeek}</div>
-                        <div className="text-muted small">Total subidos en la semana</div>
-                      </div>
-                  </div>
-                </CCarouselItem>
-              </CCarousel>
-            </CCardBody>
-          </CCard>
-        </CCol>
-      </CRow>
+      {error ? <CAlert color="warning">{error}</CAlert> : null}
 
       <CRow className="mb-4">
-        <CCol xs={12}>
-          <CCard>
-            <CCardHeader>
-              <CRow className="align-items-center">
-                <CCol md={8} className="d-flex gap-2 align-items-end">
-                  <div style={{ width: '36%' }}>
-                    <CFormLabel>Buscar por título</CFormLabel>
-                    <CInputGroup>
-                      <CFormInput placeholder="Título" value={titleFilter} onChange={(e) => setTitleFilter(e.target.value)} />
-                    </CInputGroup>
-                  </div>
-                  <div style={{ width: '28%' }}>
-                    <CFormLabel>Usuario</CFormLabel>
-                    <CFormSelect value={userFilter} onChange={(e) => setUserFilter(e.target.value)}>
-                      <option value="">Todos</option>
-                      {usersList.map((u) => (
-                        <option key={u} value={u}>
-                          {u}
-                        </option>
-                      ))}
-                    </CFormSelect>
-                  </div>
-                  <div style={{ width: '28%' }}>
-                    <CFormLabel>Fecha (creado)</CFormLabel>
-                    <CFormInput type="date" value={dateFilter} onChange={(e) => setDateFilter(e.target.value)} />
-                  </div>
-                </CCol>
-                <CCol md={4} className="d-flex justify-content-end">
-                  <CButton color="primary" onClick={openCreate}>
-                    Subir nuevo documento
-                  </CButton>
-                </CCol>
-              </CRow>
-            </CCardHeader>
+        <CCol xl={8}>
+          <CCard className="h-100">
             <CCardBody>
-              <CTable hover responsive>
-                <CTableHead>
-                  <CTableRow>
-                    <CTableHeaderCell>ID</CTableHeaderCell>
-                    <CTableHeaderCell>Usuario</CTableHeaderCell>
-                    <CTableHeaderCell>Título</CTableHeaderCell>
-                    <CTableHeaderCell>Categoría</CTableHeaderCell>
-                    <CTableHeaderCell>Creado</CTableHeaderCell>
-                    <CTableHeaderCell style={{ width: 160 }}>Acciones</CTableHeaderCell>
-                  </CTableRow>
-                </CTableHead>
-                <CTableBody>
-                  {filtered.map((d) => (
-                    <CTableRow key={d.id} className="align-middle">
-                      <CTableDataCell>{d.id}</CTableDataCell>
-                      <CTableDataCell>{d.userName || d.user}</CTableDataCell>
-                      <CTableDataCell style={{ fontWeight: 700 }}>{d.title}</CTableDataCell>
-                      <CTableDataCell>{d.category}</CTableDataCell>
-                      <CTableDataCell>{d.createdAt}</CTableDataCell>
-                      <CTableDataCell>
-                        <CButton size="sm" color="transparent" className="me-2" title="Editar" onClick={() => openEdit(d)}>
-                          <CIcon icon={cilPencil} />
-                        </CButton>
-                        <CButton size="sm" color={d.approved ? 'success' : 'transparent'} className="me-2" title="Aprobar" onClick={() => approve(d)}>
-                          <CIcon icon={cilCheck} />
-                        </CButton>
-                        <CButton size="sm" color="transparent" className="text-danger" title="Eliminar" onClick={() => remove(d)}>
-                          <CIcon icon={cilTrash} />
-                        </CButton>
-                      </CTableDataCell>
-                    </CTableRow>
-                  ))}
-                </CTableBody>
-              </CTable>
+              <div className="text-medium-emphasis mb-2">Resumen de documentos</div>
+              <h3 className="mb-2">{documents.length} documentos cargados</h3>
+              <p className="mb-0 text-body-secondary">
+                La creación y edición ahora usa `type`, `file_url`, `author_id`, `project_id` y
+                `published_at`, igual que el backend.
+              </p>
+            </CCardBody>
+          </CCard>
+        </CCol>
+        <CCol xl={4}>
+          <CCard className="h-100">
+            <CCardBody>
+              <div className="text-medium-emphasis mb-2">Último documento</div>
+              <h5 className="mb-1">{latestDocument?.title || 'Sin documentos'}</h5>
+              <div className="small text-body-secondary">
+                {latestDocument
+                  ? `${latestDocument.authorName || 'Sin autor'} • ${latestDocument.createdLabel}`
+                  : 'Aún no hay registros'}
+              </div>
             </CCardBody>
           </CCard>
         </CCol>
       </CRow>
 
-      <CModal visible={showCreate} onClose={() => setShowCreate(false)}>
-        <CModalHeader>
-          <CModalTitle>{editing ? 'Editar documento' : 'Subir nuevo documento'}</CModalTitle>
-        </CModalHeader>
-        <CModalBody>
-          <CRow>
-            <CCol md={12}>
-              <div className="mb-3">
-                <CFormLabel>Título</CFormLabel>
-                <CFormInput value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} />
-              </div>
-              <div className="mb-3">
-                <CFormLabel>Descripción</CFormLabel>
-                <CFormTextarea rows={3} value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
-              </div>
-              <div className="mb-3">
-                <CFormLabel>Categoría</CFormLabel>
-                <CFormInput value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} />
-              </div>
-              <div className="mb-3">
-                <CFormLabel>Archivo</CFormLabel>
-                <CFormInput type="file" onChange={(e) => setForm({ ...form, file: e.target.files && e.target.files[0] })} />
-              </div>
-              <div className="mb-3">
-                <CFormLabel>Proyecto (opcional)</CFormLabel>
-                <CFormSelect value={form.projectId} onChange={(e) => setForm({ ...form, projectId: e.target.value })}>
-                  <option value="">Ninguno</option>
-                  {projectsList.map((p) => (
-                    <option key={p.id} value={p.id}>{p.title}</option>
-                  ))}
-                </CFormSelect>
-              </div>
-              <div className="mb-3">
-                <CFormLabel>Usuario</CFormLabel>
-                <CFormSelect value={form.user} onChange={(e) => setForm({ ...form, user: e.target.value })}>
-                  {usersList.map((u) => (
-                    <option key={u} value={u}>
-                      {u}
-                    </option>
-                  ))}
-                </CFormSelect>
-              </div>
+      <CCard className="mb-4">
+        <CCardHeader>
+          <CRow className="align-items-end g-3">
+            <CCol md={4}>
+              <CFormLabel>Buscar</CFormLabel>
+              <CInputGroup>
+                <CFormInput
+                  placeholder="Título, autor o proyecto"
+                  value={search}
+                  onChange={(event) => setSearch(event.target.value)}
+                />
+              </CInputGroup>
+            </CCol>
+            <CCol md={3}>
+              <CFormLabel>Tipo</CFormLabel>
+              <CFormSelect
+                value={typeFilter}
+                onChange={(event) => setTypeFilter(event.target.value)}
+              >
+                <option value="">Todos</option>
+                {typeOptions.map((type) => (
+                  <option key={type} value={type}>
+                    {type}
+                  </option>
+                ))}
+              </CFormSelect>
+            </CCol>
+            <CCol md={3}>
+              <CFormLabel>Autor</CFormLabel>
+              <CFormSelect
+                value={authorFilter}
+                onChange={(event) => setAuthorFilter(event.target.value)}
+              >
+                <option value="">Todos</option>
+                {users.map((user) => (
+                  <option key={user.id} value={user.id}>
+                    {getUserDisplayName(user)}
+                  </option>
+                ))}
+              </CFormSelect>
+            </CCol>
+            <CCol md={2} className="d-flex justify-content-end">
+              <CButton color="primary" onClick={openCreate}>
+                Crear documento
+              </CButton>
             </CCol>
           </CRow>
+        </CCardHeader>
+        <CCardBody>
+          {loading ? (
+            <div className="text-center py-5">
+              <CSpinner />
+            </div>
+          ) : (
+            <CTable hover responsive>
+              <CTableHead>
+                <CTableRow>
+                  <CTableHeaderCell>ID</CTableHeaderCell>
+                  <CTableHeaderCell>Título</CTableHeaderCell>
+                  <CTableHeaderCell>Tipo</CTableHeaderCell>
+                  <CTableHeaderCell>Autor</CTableHeaderCell>
+                  <CTableHeaderCell>Proyecto</CTableHeaderCell>
+                  <CTableHeaderCell>Publicado</CTableHeaderCell>
+                  <CTableHeaderCell style={{ width: 120 }}>Acciones</CTableHeaderCell>
+                </CTableRow>
+              </CTableHead>
+              <CTableBody>
+                {filteredDocuments.map((document) => (
+                  <CTableRow key={document.id}>
+                    <CTableDataCell>{document.id}</CTableDataCell>
+                    <CTableDataCell>{document.title}</CTableDataCell>
+                    <CTableDataCell>{document.type}</CTableDataCell>
+                    <CTableDataCell>{document.authorName || 'Sin autor'}</CTableDataCell>
+                    <CTableDataCell>{document.projectName}</CTableDataCell>
+                    <CTableDataCell>
+                      {document.publishedLabel || document.createdLabel}
+                    </CTableDataCell>
+                    <CTableDataCell>
+                      <CButton
+                        size="sm"
+                        color="transparent"
+                        className="me-2"
+                        onClick={() => openEdit(document)}
+                      >
+                        <CIcon icon={cilPencil} />
+                      </CButton>
+                      <CButton
+                        size="sm"
+                        color="transparent"
+                        className="text-danger"
+                        onClick={() => removeDocument(document)}
+                      >
+                        <CIcon icon={cilTrash} />
+                      </CButton>
+                    </CTableDataCell>
+                  </CTableRow>
+                ))}
+              </CTableBody>
+            </CTable>
+          )}
+        </CCardBody>
+      </CCard>
+
+      <CModal visible={modalVisible} onClose={closeModal}>
+        <CModalHeader>
+          <CModalTitle>{editingId ? 'Editar documento' : 'Crear documento'}</CModalTitle>
+        </CModalHeader>
+        <CModalBody>
+          <div className="mb-3">
+            <CFormLabel>Título</CFormLabel>
+            <CFormInput
+              value={form.title}
+              onChange={(event) => setForm({ ...form, title: event.target.value })}
+            />
+          </div>
+          <div className="mb-3">
+            <CFormLabel>Descripción</CFormLabel>
+            <CFormTextarea
+              rows={4}
+              value={form.description}
+              onChange={(event) => setForm({ ...form, description: event.target.value })}
+            />
+          </div>
+          <div className="mb-3">
+            <CFormLabel>Tipo</CFormLabel>
+            <CFormInput
+              value={form.type}
+              onChange={(event) => setForm({ ...form, type: event.target.value })}
+            />
+          </div>
+          <div className="mb-3">
+            <CFormLabel>URL del archivo</CFormLabel>
+            <CFormInput
+              placeholder="https://..."
+              value={form.file_url}
+              onChange={(event) => setForm({ ...form, file_url: event.target.value })}
+            />
+          </div>
+          <div className="mb-3">
+            <CFormLabel>Autor</CFormLabel>
+            <CFormSelect
+              value={form.author_id}
+              onChange={(event) => setForm({ ...form, author_id: event.target.value })}
+            >
+              <option value="">Seleccione un autor</option>
+              {users.map((user) => (
+                <option key={user.id} value={user.id}>
+                  {getUserDisplayName(user)}
+                </option>
+              ))}
+            </CFormSelect>
+          </div>
+          <div className="mb-3">
+            <CFormLabel>Proyecto</CFormLabel>
+            <CFormSelect
+              value={form.project_id}
+              onChange={(event) => setForm({ ...form, project_id: event.target.value })}
+            >
+              <option value="">Sin proyecto</option>
+              {projects.map((project) => (
+                <option key={project.id} value={project.id}>
+                  {project.name}
+                </option>
+              ))}
+            </CFormSelect>
+          </div>
+          <div className="mb-3">
+            <CFormLabel>Fecha de publicación</CFormLabel>
+            <CFormInput
+              type="date"
+              value={form.published_at}
+              onChange={(event) => setForm({ ...form, published_at: event.target.value })}
+            />
+          </div>
         </CModalBody>
         <CModalFooter>
-          <CButton color="secondary" onClick={() => setShowCreate(false)}>
+          <CButton color="secondary" onClick={closeModal}>
             Cancelar
           </CButton>
-          <CButton color="primary" onClick={save}>
-            Guardar
+          <CButton color="primary" disabled={saving} onClick={saveDocument}>
+            {saving ? 'Guardando...' : 'Guardar'}
           </CButton>
         </CModalFooter>
       </CModal>
