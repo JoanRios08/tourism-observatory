@@ -27,6 +27,8 @@ import {
   CTableRow,
 } from '@coreui/react'
 import { extractCollection, normalizeUser } from '../../utils/observatoryAdapters'
+import CIcon from '@coreui/icons-react'
+import { cilLowVision, cilViewColumn } from '@coreui/icons'
 
 const initialCreateForm = {
   first_name: '',
@@ -34,6 +36,7 @@ const initialCreateForm = {
   dni: '',
   email: '',
   password: '',
+  confirm_password: '',
   role_id: 1,
 }
 
@@ -43,6 +46,8 @@ const initialEditForm = {
   last_name: '',
   dni: '',
   email: '',
+  password: '',
+  confirm_password: '',
   role_id: 1,
 }
 
@@ -62,6 +67,10 @@ const Users = () => {
   const [showCreate, setShowCreate] = useState(false)
   const [showEdit, setShowEdit] = useState(false)
   const [showDelete, setShowDelete] = useState(false)
+  const [showCreatePassword, setShowCreatePassword] = useState(false)
+  const [showCreateConfirmPassword, setShowCreateConfirmPassword] = useState(false)
+  const [showEditPassword, setShowEditPassword] = useState(false)
+  const [showEditConfirmPassword, setShowEditConfirmPassword] = useState(false)
   const [createForm, setCreateForm] = useState(initialCreateForm)
   const [editForm, setEditForm] = useState(initialEditForm)
   const [deleteTarget, setDeleteTarget] = useState(null)
@@ -102,6 +111,8 @@ const Users = () => {
 
   const openCreate = () => {
     setCreateForm(initialCreateForm)
+    setShowCreatePassword(false)
+    setShowCreateConfirmPassword(false)
     setShowCreate(true)
   }
 
@@ -112,14 +123,23 @@ const Users = () => {
       last_name: user.last_name || '',
       dni: user.dni || '',
       email: user.email || '',
+      password: '',
+      confirm_password: '',
       role_id: user.role_id || 1,
     })
+    setShowEditPassword(false)
+    setShowEditConfirmPassword(false)
     setShowEdit(true)
   }
 
   const handleSaveCreate = async () => {
     if (!createForm.first_name.trim() || !createForm.email.trim() || !createForm.password.trim()) {
       alert('Nombre, email y contraseña son obligatorios.')
+      return
+    }
+
+    if (createForm.password !== createForm.confirm_password) {
+      alert('La contraseña y su confirmación deben coincidir.')
       return
     }
 
@@ -147,14 +167,32 @@ const Users = () => {
       return
     }
 
+    if (editForm.password || editForm.confirm_password) {
+      if (!editForm.password.trim() || !editForm.confirm_password.trim()) {
+        alert('Si vas a cambiar la contraseña, debes completar ambos campos.')
+        return
+      }
+
+      if (editForm.password !== editForm.confirm_password) {
+        alert('La contraseña y su confirmación deben coincidir.')
+        return
+      }
+    }
+
     try {
-      await userApi.updateUser(editForm.id, {
+      const payload = {
         first_name: editForm.first_name.trim(),
         last_name: editForm.last_name.trim(),
         dni: editForm.dni.trim(),
         email: editForm.email.trim(),
         role_id: Number(editForm.role_id),
-      })
+      }
+
+      if (editForm.password.trim()) {
+        payload.password = editForm.password
+      }
+
+      await userApi.updateUser(editForm.id, payload)
       setShowEdit(false)
       setEditForm(initialEditForm)
       await loadUsers()
@@ -298,11 +336,41 @@ const Users = () => {
           </div>
           <div className="mb-3">
             <CFormLabel>Contraseña</CFormLabel>
-            <CFormInput
-              type="password"
-              value={createForm.password}
-              onChange={(event) => setCreateForm({ ...createForm, password: event.target.value })}
-            />
+            <CInputGroup>
+              <CFormInput
+                type={showCreatePassword ? 'text' : 'password'}
+                value={createForm.password}
+                onChange={(event) => setCreateForm({ ...createForm, password: event.target.value })}
+              />
+              <CButton
+                type="button"
+                color="light"
+                variant="ghost"
+                onClick={() => setShowCreatePassword((current) => !current)}
+              >
+                <CIcon icon={showCreatePassword ? cilLowVision : cilViewColumn} />
+              </CButton>
+            </CInputGroup>
+          </div>
+          <div className="mb-3">
+            <CFormLabel>Confirmar contraseña</CFormLabel>
+            <CInputGroup>
+              <CFormInput
+                type={showCreateConfirmPassword ? 'text' : 'password'}
+                value={createForm.confirm_password}
+                onChange={(event) =>
+                  setCreateForm({ ...createForm, confirm_password: event.target.value })
+                }
+              />
+              <CButton
+                type="button"
+                color="light"
+                variant="ghost"
+                onClick={() => setShowCreateConfirmPassword((current) => !current)}
+              >
+                <CIcon icon={showCreateConfirmPassword ? cilLowVision : cilViewColumn} />
+              </CButton>
+            </CInputGroup>
           </div>
           <div className="mb-3">
             <CFormLabel>Rol</CFormLabel>
@@ -361,6 +429,46 @@ const Users = () => {
               value={editForm.email}
               onChange={(event) => setEditForm({ ...editForm, email: event.target.value })}
             />
+          </div>
+          <div className="mb-3">
+            <CFormLabel>Nueva contraseña</CFormLabel>
+            <CInputGroup>
+              <CFormInput
+                type={showEditPassword ? 'text' : 'password'}
+                value={editForm.password}
+                onChange={(event) => setEditForm({ ...editForm, password: event.target.value })}
+                placeholder="Deja este campo vacío si no deseas cambiarla"
+              />
+              <CButton
+                type="button"
+                color="light"
+                variant="ghost"
+                onClick={() => setShowEditPassword((current) => !current)}
+              >
+                <CIcon icon={showEditPassword ? cilLowVision : cilViewColumn} />
+              </CButton>
+            </CInputGroup>
+          </div>
+          <div className="mb-3">
+            <CFormLabel>Confirmar nueva contraseña</CFormLabel>
+            <CInputGroup>
+              <CFormInput
+                type={showEditConfirmPassword ? 'text' : 'password'}
+                value={editForm.confirm_password}
+                onChange={(event) =>
+                  setEditForm({ ...editForm, confirm_password: event.target.value })
+                }
+                placeholder="Repite la nueva contraseña"
+              />
+              <CButton
+                type="button"
+                color="light"
+                variant="ghost"
+                onClick={() => setShowEditConfirmPassword((current) => !current)}
+              >
+                <CIcon icon={showEditConfirmPassword ? cilLowVision : cilViewColumn} />
+              </CButton>
+            </CInputGroup>
           </div>
           <div className="mb-3">
             <CFormLabel>Rol</CFormLabel>
