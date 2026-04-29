@@ -51,12 +51,49 @@ const initialEditForm = {
   role_id: 1,
 }
 
+const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+const alphanumericRegex = /^[a-zA-Z0-9]+$/
+
 const roleColor = (roleLabel) => {
   const role = String(roleLabel || '').toLowerCase()
   if (role.includes('admin')) return 'primary'
   if (role.includes('coord')) return 'success'
   if (role.includes('prof')) return 'info'
   return 'secondary'
+}
+
+const validateCreateUserForm = (form) => {
+  const firstName = form.first_name.trim()
+  const lastName = form.last_name.trim()
+  const dni = form.dni.trim()
+  const email = form.email.trim()
+  const password = form.password
+
+  if (!firstName || !email || !password.trim()) {
+    return 'Nombre, email y contraseña son obligatorios.'
+  }
+
+  if (dni.startsWith('0')) {
+    return 'La cédula de identidad no puede comenzar con el número 0.'
+  }
+
+  if ((firstName + lastName).length > 40) {
+    return 'La suma del nombre y apellido no puede superar los 40 caracteres.'
+  }
+
+  if (!emailRegex.test(email)) {
+    return 'Ingresa un email válido. Ejemplo: usuario@dominio.com.'
+  }
+
+  if (password.length < 6 || !alphanumericRegex.test(password)) {
+    return 'La contraseña debe tener al menos 6 caracteres y contener solo letras y números.'
+  }
+
+  if (form.password !== form.confirm_password) {
+    return 'La contraseña y su confirmación deben coincidir.'
+  }
+
+  return ''
 }
 
 const Users = () => {
@@ -133,13 +170,9 @@ const Users = () => {
   }
 
   const handleSaveCreate = async () => {
-    if (!createForm.first_name.trim() || !createForm.email.trim() || !createForm.password.trim()) {
-      alert('Nombre, email y contraseña son obligatorios.')
-      return
-    }
-
-    if (createForm.password !== createForm.confirm_password) {
-      alert('La contraseña y su confirmación deben coincidir.')
+    const validationError = validateCreateUserForm(createForm)
+    if (validationError) {
+      alert(validationError)
       return
     }
 
@@ -183,7 +216,6 @@ const Users = () => {
       const payload = {
         first_name: editForm.first_name.trim(),
         last_name: editForm.last_name.trim(),
-        dni: editForm.dni.trim(),
         email: editForm.email.trim(),
         role_id: Number(editForm.role_id),
       }
@@ -413,13 +445,6 @@ const Users = () => {
             <CFormInput
               value={editForm.last_name}
               onChange={(event) => setEditForm({ ...editForm, last_name: event.target.value })}
-            />
-          </div>
-          <div className="mb-3">
-            <CFormLabel>Cédula</CFormLabel>
-            <CFormInput
-              value={editForm.dni}
-              onChange={(event) => setEditForm({ ...editForm, dni: event.target.value })}
             />
           </div>
           <div className="mb-3">
