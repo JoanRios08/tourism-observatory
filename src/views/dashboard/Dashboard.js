@@ -21,7 +21,7 @@ import {
   CWidgetStatsF,
 } from '@coreui/react'
 import { CChartBar, CChartDoughnut } from '@coreui/react-chartjs'
-import { formatDate } from '../../utils/observatoryAdapters'
+import { extractCollection, formatDate } from '../../utils/observatoryAdapters'
 
 const emptySummary = {
   stats: {
@@ -40,6 +40,71 @@ const emptySummary = {
   },
 }
 
+const getMonthKey = (value) => {
+  if (!value) return 'Sin fecha'
+
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return 'Sin fecha'
+
+  return date.toLocaleDateString('es-VE', {
+    year: 'numeric',
+    month: 'short',
+  })
+}
+
+const buildFallbackSummary = ({ users = [], projects = [], documents = [] }) => {
+  const sortedProjects = [...projects].sort(
+    (a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0),
+  )
+  const getDocumentDate = (document) => new Date(document.published_at || document.created_at || 0)
+  const getUserDate = (user) => new Date(user.last_login || user.created_at || 0)
+  const sortedDocuments = [...documents].sort((a, b) => getDocumentDate(b) - getDocumentDate(a))
+  const sortedUsers = [...users].sort((a, b) => getUserDate(b) - getUserDate(a))
+
+  const projectsByMonth = sortedProjects.reduce((acc, project) => {
+    const month = getMonthKey(project.created_at)
+    acc.set(month, (acc.get(month) || 0) + 1)
+    return acc
+  }, new Map())
+
+  const documentsByType = documents.reduce((acc, document) => {
+    const type = document.type || document.category || 'Sin tipo'
+    acc.set(type, (acc.get(type) || 0) + 1)
+    return acc
+  }, new Map())
+
+  return {
+    stats: {
+      totalDocuments: documents.length,
+      totalProjects: projects.length,
+      totalUsers: users.length,
+    },
+    recentActivity: {
+      lastProjects: sortedProjects.slice(0, 5),
+      lastDocuments: sortedDocuments.slice(0, 5),
+      lastLogins: sortedUsers.slice(0, 5),
+    },
+    charts: {
+      barChart: [...projectsByMonth.entries()].map(([month, total]) => ({ month, total })),
+      donutChart: [...documentsByType.entries()].map(([label, value]) => ({ label, value })),
+    },
+  }
+}
+
+const loadFallbackSummary = async () => {
+  const [usersResponse, projectsResponse, documentsResponse] = await Promise.all([
+    axiosClient.get('/users'),
+    axiosClient.get('/projects'),
+    axiosClient.get('/documents'),
+  ])
+
+  return buildFallbackSummary({
+    users: extractCollection(usersResponse.data, ['users']),
+    projects: extractCollection(projectsResponse.data, ['projects']),
+    documents: extractCollection(documentsResponse.data, ['documents']),
+  })
+}
+
 const Dashboard = () => {
   const [summary, setSummary] = useState(emptySummary)
   const [loading, setLoading] = useState(false)
@@ -55,8 +120,14 @@ const Dashboard = () => {
         setSummary(data || emptySummary)
       } catch (fetchError) {
         console.error('Dashboard fetch error', fetchError)
-        setSummary(emptySummary)
-        setError('No se pudo cargar el resumen del dashboard.')
+        try {
+          setSummary(await loadFallbackSummary())
+          setError('El resumen consolidado no está disponible; se muestran datos básicos.')
+        } catch (fallbackError) {
+          console.error('Dashboard fallback error', fallbackError)
+          setSummary(emptySummary)
+          setError('No se pudo cargar el resumen del dashboard.')
+        }
       } finally {
         setLoading(false)
       }

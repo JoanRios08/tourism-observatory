@@ -1,38 +1,101 @@
-import React, { useMemo, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import {
-  CRow,
-  CCol,
-  CCard,
-  CCardHeader,
-  CCardBody,
-  CInputGroup,
-  CFormInput,
-  CFormSelect,
-  CButton,
-  CTable,
-  CTableHead,
-  CTableBody,
-  CTableRow,
-  CTableHeaderCell,
-  CTableDataCell,
+  CAlert,
   CBadge,
+  CButton,
+  CCard,
+  CCardBody,
+  CCardHeader,
+  CCol,
+  CForm,
+  CFormInput,
+  CFormLabel,
+  CFormSelect,
+  CFormTextarea,
+  CInputGroup,
   CModal,
-  CModalHeader,
-  CModalTitle,
   CModalBody,
   CModalFooter,
-  CForm,
-  CFormLabel,
+  CModalHeader,
+  CModalTitle,
+  CRow,
+  CSpinner,
+  CTable,
+  CTableBody,
+  CTableDataCell,
+  CTableHead,
+  CTableHeaderCell,
+  CTableRow,
 } from '@coreui/react'
 import CIcon from '@coreui/icons-react'
-import { cilPencil, cilTrash, cilCheck } from '@coreui/icons'
+import { cilCheck, cilPencil, cilTrash } from '@coreui/icons'
+import authorsApi from '../../api/endpoints/authorsApi'
 import postsApi from '../../api/endpoints/postsApi'
-import axiosClient from '../../api/axiosClient'
+import { extractCollection, formatDate } from '../../utils/observatoryAdapters'
+
+const initialForm = { author_id: '', title: '', category_id: '', content: '' }
+
+const statusColor = {
+  published: 'success',
+  pending_approval: 'warning',
+  draft: 'secondary',
+}
+
+const fallbackCategories = [
+  { id: 1, name: 'Categoría 1' },
+  { id: 2, name: 'Categoría 2' },
+  { id: 3, name: 'Categoría 3' },
+  { id: 4, name: 'Categoría 4' },
+  { id: 5, name: 'Categoría 5' },
+  { id: 6, name: 'Categoría 6' },
+  { id: 7, name: 'Categoría 7' },
+  { id: 8, name: 'Categoría 8' },
+]
 
 const normalizePostStatus = (post) => {
-  if (post.status === 'approved' || post.approved === true) return 'published'
-  if (post.status === 'pending' || post.approved === false) return 'pending_approval'
-  return post.status ?? post.state ?? ''
+  if (post.status) return post.status
+  if (post.approved === true) return 'published'
+  if (post.approved === false) return 'pending_approval'
+  return ''
+}
+
+const normalizePost = (post) => ({
+  ...post,
+  id: post.id ?? post.ID ?? null,
+  title: post.title ?? post.name ?? '',
+  content: post.content ?? post.body ?? '',
+  status: normalizePostStatus(post),
+  created_at: post.created_at ?? post.createdAt ?? '',
+  updated_at: post.updated_at ?? post.updatedAt ?? '',
+  user_id: post.user_id ?? post.userId ?? post.author_id ?? post.authorId ?? null,
+  category_id: post.category_id ?? post.categoryId ?? null,
+  categoryName: post.category_name ?? post.categoryName ?? post.category ?? '',
+  author_id: post.author_id ?? post.authorId ?? post.user_id ?? post.userId ?? null,
+})
+
+const getCollection = (payload, keys) => {
+  const data = typeof payload === 'string' ? JSON.parse(payload) : payload
+  return extractCollection(data, keys)
+}
+
+const toNumberOrUndefined = (value) => {
+  if (value === '' || value === null || value === undefined) return undefined
+  const numberValue = Number(value)
+  return Number.isNaN(numberValue) ? undefined : numberValue
+}
+
+const getPostPayload = (form, status = 'pending_approval') => {
+  const authorId = toNumberOrUndefined(form.author_id)
+  const categoryId = toNumberOrUndefined(form.category_id)
+
+  return {
+    title: form.title.trim(),
+    content: form.content.trim(),
+    status,
+    user_id: authorId,
+    author_id: authorId,
+    category_id: categoryId,
+  }
 }
 
 const isPublished = (post) => normalizePostStatus(post) === 'published'
@@ -40,524 +103,449 @@ const isPublished = (post) => normalizePostStatus(post) === 'published'
 const getNextPostStatus = (post) => (isPublished(post) ? 'pending_approval' : 'published')
 
 const Post = () => {
-  console.log('🔍 postsApi importado:', postsApi)
-  console.log('🔍 postsApi.getPosts existe?:', typeof postsApi?.getPosts)
-  const [usersList, setUsersList] = useState([])
-  const [categories, setCategories] = useState(['Noticias', 'Eventos', 'Anuncios'])
+  const [authors, setAuthors] = useState([])
   const [posts, setPosts] = useState([])
+  const [loading, setLoading] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
   const [titleFilter, setTitleFilter] = useState('')
-  const [userFilter, setUserFilter] = useState('')
+  const [authorFilter, setAuthorFilter] = useState('')
   const [categoryFilter, setCategoryFilter] = useState('')
   const [showEdit, setShowEdit] = useState(false)
   const [editingPost, setEditingPost] = useState(null)
-  const [editForm, setEditForm] = useState({ user: '', title: '', category: '', content: '' })
+  const [editForm, setEditForm] = useState(initialForm)
   const [showCreate, setShowCreate] = useState(false)
-  const [createForm, setCreateForm] = useState({ user: '', title: '', category: '', content: '' })
+  const [createForm, setCreateForm] = useState(initialForm)
 
-  React.useEffect(() => {
-    console.log('🚀 useEffect INICIO')
+  const loadData = useCallback(async () => {
+    setLoading(true)
+    setError('')
 
-    const loadData = async () => {
-      try {
-        console.log('📞 Llamando a postsApi.getPosts...')
-        const res = await postsApi.getPosts(true)
-        console.log('📦 Respuesta completa:', res)
+    try {
+      const [postsResponse, authorsResponse] = await Promise.all([
+        postsApi.getPosts(true),
+        authorsApi.getAuthors(),
+      ])
 
-        // PARSEAR EL JSON SI ES STRING
-        let data = res?.data
-        if (typeof data === 'string') {
-          console.log('⚠️ res.data es string, parseando JSON...')
-          try {
-            data = JSON.parse(data)
-            console.log('✅ JSON parseado:', data)
-          } catch (e) {
-            console.error('❌ Error parseando JSON:', e)
-            throw new Error('La respuesta no es JSON válido')
-          }
-        }
-
-        // Ahora extraer los posts
-        const arr = data?.posts || []
-        console.log('📋 Array de posts:', arr)
-        console.log('📋 Cantidad de posts:', arr.length)
-
-        if (arr.length === 0) {
-          console.warn('⚠️ El array está vacío!')
-        }
-
-        const normalized = arr.map((p) => ({
-          id: p.id ?? p.ID ?? null,
-          title: p.title ?? p.name ?? '',
-          content: p.content ?? p.body ?? '',
-          status: normalizePostStatus(p),
-          created_at: p.created_at ?? p.createdAt ?? '',
-          updated_at: p.updated_at ?? p.updatedAt ?? '',
-          user_id: p.user_id ?? p.userId ?? p.author_id ?? p.authorId ?? null,
-          category_id: p.category_id ?? p.categoryId ?? p.category ?? null,
-          author_id: p.author_id ?? p.authorId ?? p.user_id ?? null,
-        }))
-
-        console.log('✅ Posts normalizados:', normalized)
-        setPosts(normalized)
-      } catch (err) {
-        console.error('❌ ERROR en loadData:', err)
-        setPosts([])
-      }
-
-      // Load users (probablemente también necesita parseo)
-      try {
-        const res = await axiosClient.get('/users', { params: { t: Date.now() } })
-
-        let data = res?.data
-        if (typeof data === 'string') {
-          data = JSON.parse(data)
-        }
-
-        const arr = data?.users || (Array.isArray(data) ? data : data?.data || [])
-
-        const names = arr.reduce((acc, u) => {
-          acc[u.id ?? u._id] =
-            u.fullName ||
-            `${u.nombre || u.first_name || ''} ${u.apellido || u.last_name || ''}`.trim()
-          return acc
-        }, {})
-        setUsersList(names)
-      } catch (err) {
-        console.error('❌ Error cargando users:', err)
-        setUsersList({})
-      }
+      setPosts(getCollection(postsResponse.data, ['posts']).map(normalizePost))
+      setAuthors(getCollection(authorsResponse.data, ['authors']))
+    } catch (loadError) {
+      console.error('Error cargando publicaciones', loadError)
+      setPosts([])
+      setAuthors([])
+      setError('No se pudieron cargar las publicaciones.')
+    } finally {
+      setLoading(false)
     }
-
-    loadData()
   }, [])
 
-  const filtered = useMemo(() => {
-    return posts.filter((p) => {
-      const matchTitle = titleFilter
-        ? (p.title || '').toLowerCase().includes(titleFilter.toLowerCase())
-        : true
-      const matchUser = userFilter
-        ? String(p.user_id || p.author_id || '') === String(userFilter)
-        : true
-      const matchCategory = categoryFilter
-        ? String(p.category_id || p.category || '') === String(categoryFilter)
-        : true
-      return matchTitle && matchUser && matchCategory
-    })
-  }, [posts, titleFilter, userFilter, categoryFilter])
+  useEffect(() => {
+    loadData()
+  }, [loadData])
 
-  const formatDate = (d) => {
-    if (!d) return ''
-    try {
-      return new Date(d).toLocaleString()
-    } catch (e) {
-      return String(d)
-    }
-  }
+  const authorNameById = useMemo(
+    () => new Map(authors.map((author) => [String(author.id), author.name || author.email || ''])),
+    [authors],
+  )
 
-  const handleCreate = () => setShowCreate(true)
+  const categoryOptions = useMemo(() => {
+    const categoriesById = new Map(fallbackCategories.map((category) => [category.id, category]))
 
-  const handleSaveCreate = () => {
-    if (!createForm.title) {
-      alert('El título es obligatorio')
-      return
-    }
-    const payload = {
-      title: createForm.title,
-      content: createForm.content || '',
-      status: 'pending_approval',
-      user_id: createForm.user || null,
-      category_id: createForm.category || null,
-    }
-    postsApi
-      .createPost(payload)
-      .then(() => {
-        // CAMBIO AQUÍ: Usar .posts
-        postsApi.getPosts(true).then((r) => {
-          const raw = r?.data ?? r
-          const arr = raw?.posts || (Array.isArray(raw) ? raw : raw?.data || [])
-          const normalize = (p) => ({
-            id: p.id ?? p.ID ?? null,
-            title: p.title ?? p.name ?? '',
-            content: p.content ?? p.body ?? '',
-            status: normalizePostStatus(p),
-            created_at: p.created_at ?? p.createdAt ?? '',
-            updated_at: p.updated_at ?? p.updatedAt ?? '',
-            user_id: p.user_id ?? p.userId ?? p.author_id ?? p.authorId ?? null,
-            category_id: p.category_id ?? p.categoryId ?? p.category ?? null,
-            author_id: p.author_id ?? p.authorId ?? p.user_id ?? null,
-          })
-          setPosts(arr.map(normalize))
-        })
+    posts.forEach((post) => {
+      if (!post.category_id) return
+      categoriesById.set(Number(post.category_id), {
+        id: Number(post.category_id),
+        name: post.categoryName || `Categoría ${post.category_id}`,
       })
-      .catch(() => alert('Error creando publicación'))
-    setShowCreate(false)
-    setCreateForm({ user: '', title: '', category: '', content: '' })
+    })
+
+    return [...categoriesById.values()].sort((a, b) => a.id - b.id)
+  }, [posts])
+
+  const filtered = useMemo(() => {
+    return posts.filter((post) => {
+      const query = titleFilter.trim().toLowerCase()
+      const matchesTitle = !query || post.title.toLowerCase().includes(query)
+      const matchesAuthor = !authorFilter || String(post.author_id || post.user_id) === authorFilter
+      const matchesCategory = !categoryFilter || String(post.category_id) === categoryFilter
+      return matchesTitle && matchesAuthor && matchesCategory
+    })
+  }, [posts, titleFilter, authorFilter, categoryFilter])
+
+  const openCreate = () => {
+    setCreateForm({
+      ...initialForm,
+      author_id: authors[0]?.id ? String(authors[0].id) : '',
+      category_id: categoryOptions[0]?.id ? String(categoryOptions[0].id) : '',
+    })
+    setShowCreate(true)
   }
 
-  const handleDelete = async (post) => {
-    if (!window.confirm(`¿Eliminar publicación "${post.title}"?`)) return
-
-    try {
-      await postsApi.deletePost(post.id)
-      setPosts((prev) => prev.filter((p) => (p.id ?? p.ID) !== post.id))
-    } catch (err) {
-      console.error('Error eliminando post:', err)
-      alert('Error eliminando publicación')
-    }
-  }
-
-  const handleEdit = (post) => {
+  const openEdit = (post) => {
     setEditingPost(post)
     setEditForm({
-      user: post.user_id || post.author_id || '',
+      author_id: post.author_id || post.user_id ? String(post.author_id || post.user_id) : '',
       title: post.title || '',
-      category: post.category_id || post.category || '',
+      category_id: post.category_id ? String(post.category_id) : '',
       content: post.content || '',
     })
     setShowEdit(true)
   }
-  const handleSaveEdit = async () => {
-    if (!editForm.title) {
-      alert('El título es obligatorio')
+
+  const closeCreate = () => {
+    setShowCreate(false)
+    setCreateForm(initialForm)
+  }
+
+  const closeEdit = () => {
+    setShowEdit(false)
+    setEditingPost(null)
+    setEditForm(initialForm)
+  }
+
+  const saveCreate = async () => {
+    if (!createForm.title.trim() || !createForm.author_id || !createForm.category_id) {
+      alert('Título, autor y categoría son obligatorios.')
       return
     }
 
+    setSaving(true)
     try {
-      const payload = {
-        title: editForm.title,
-        content: editForm.content || '',
-        user_id: editForm.user || null,
-        category_id: editForm.category || null,
-        updated_at: new Date().toISOString(),
-      }
-
-      await postsApi.updatePost(editingPost.id, payload)
-
-      // Recargar posts
-      const res = await postsApi.getPosts(true)
-      let data = res?.data
-      if (typeof data === 'string') {
-        data = JSON.parse(data)
-      }
-
-      const arr = data?.posts || []
-      const normalized = arr.map((p) => ({
-        id: p.id ?? p.ID ?? null,
-        title: p.title ?? p.name ?? '',
-        content: p.content ?? p.body ?? '',
-        status: normalizePostStatus(p),
-        created_at: p.created_at ?? p.createdAt ?? '',
-        updated_at: p.updated_at ?? p.updatedAt ?? '',
-        user_id: p.user_id ?? p.userId ?? p.author_id ?? p.authorId ?? null,
-        category_id: p.category_id ?? p.categoryId ?? p.category ?? null,
-        author_id: p.author_id ?? p.authorId ?? p.user_id ?? null,
-      }))
-
-      setPosts(normalized)
-      setShowEdit(false)
-      setEditingPost(null)
-    } catch (err) {
-      console.error('Error actualizando post:', err)
-      alert('Error actualizando publicación')
+      await postsApi.createPost(getPostPayload(createForm))
+      closeCreate()
+      await loadData()
+    } catch (createError) {
+      console.error('Error creando publicación', createError)
+      alert(
+        'Error creando publicación: ' +
+          (createError.response?.data?.error ||
+            createError.response?.data?.message ||
+            createError.message),
+      )
+    } finally {
+      setSaving(false)
     }
   }
-  const handleApprove = async (post) => {
+
+  const saveEdit = async () => {
+    if (!editForm.title.trim() || !editForm.author_id || !editForm.category_id) {
+      alert('Título, autor y categoría son obligatorios.')
+      return
+    }
+
+    setSaving(true)
     try {
-      const newStatus = getNextPostStatus(post)
+      await postsApi.updatePost(
+        editingPost.id,
+        getPostPayload(editForm, editingPost.status || 'pending_approval'),
+      )
+      closeEdit()
+      await loadData()
+    } catch (updateError) {
+      console.error('Error actualizando publicación', updateError)
+      alert(
+        'Error actualizando publicación: ' +
+          (updateError.response?.data?.error ||
+            updateError.response?.data?.message ||
+            updateError.message),
+      )
+    } finally {
+      setSaving(false)
+    }
+  }
 
-      // Solo status
-      const payload = { status: newStatus }
+  const deletePost = async (post) => {
+    if (!window.confirm(`¿Eliminar publicación "${post.title}"?`)) return
 
-      console.log('📤 Enviando:', payload)
+    try {
+      await postsApi.deletePost(post.id)
+      setPosts((current) => current.filter((item) => item.id !== post.id))
+    } catch (deleteError) {
+      console.error('Error eliminando publicación', deleteError)
+      alert(
+        'Error eliminando publicación: ' +
+          (deleteError.response?.data?.error ||
+            deleteError.response?.data?.message ||
+            deleteError.message),
+      )
+    }
+  }
 
-      await postsApi.updatePost(post.id, payload)
+  const toggleStatus = async (post) => {
+    const newStatus = getNextPostStatus(post)
 
-      setPosts((prev) => prev.map((p) => (p.id === post.id ? { ...p, status: newStatus } : p)))
-    } catch (err) {
-      console.error('❌ Error completo:', err)
-      console.error('❌ Response data:', err.response?.data)
+    try {
+      await postsApi.updatePost(
+        post.id,
+        getPostPayload(
+          {
+            author_id: post.author_id || post.user_id,
+            title: post.title,
+            category_id: post.category_id,
+            content: post.content,
+          },
+          newStatus,
+        ),
+      )
+
+      setPosts((current) =>
+        current.map((item) =>
+          item.id === post.id
+            ? { ...item, status: newStatus, updated_at: new Date().toISOString() }
+            : item,
+        ),
+      )
+    } catch (statusError) {
+      console.error('Error cambiando estado', statusError)
       alert(
         'Error cambiando estado: ' +
-          (err.response?.data?.error || err.response?.data?.message || err.message),
+          (statusError.response?.data?.error ||
+            statusError.response?.data?.message ||
+            statusError.message),
       )
     }
   }
 
   return (
     <>
+      {error ? <CAlert color="warning">{error}</CAlert> : null}
+
       <CRow className="mb-4">
         <CCol xs={12}>
           <CCard>
             <CCardHeader>
-              <CRow className="align-items-center">
-                <CCol md={8} className="d-flex gap-2 align-items-center">
-                  <div style={{ width: '40%' }}>
-                    <CFormLabel>Filtrar por título</CFormLabel>
-                    <CInputGroup>
-                      <CFormInput
-                        placeholder="Título"
-                        value={titleFilter}
-                        onChange={(e) => setTitleFilter(e.target.value)}
-                      />
-                    </CInputGroup>
-                  </div>
-                  <div style={{ width: '28%' }}>
-                    <CFormLabel>Filtrar por usuario</CFormLabel>
-                    <CFormSelect value={userFilter} onChange={(e) => setUserFilter(e.target.value)}>
-                      <option value="">Todos</option>
-                      {Array.isArray(usersList)
-                        ? usersList.map((u) => (
-                            <option key={u.id || u} value={u.id ?? u}>
-                              {u.fullName ??
-                                `${u.nombre || u.first_name || ''} ${u.apellido || u.last_name || ''}`.trim()}
-                            </option>
-                          ))
-                        : Object.entries(usersList || {}).map(([id, name]) => (
-                            <option key={id} value={id}>
-                              {name}
-                            </option>
-                          ))}
-                    </CFormSelect>
-                  </div>
-                  <div style={{ width: '28%' }}>
-                    <CFormLabel>Filtrar por categoría</CFormLabel>
-                    <CFormSelect
-                      value={categoryFilter}
-                      onChange={(e) => setCategoryFilter(e.target.value)}
-                    >
-                      <option value="">Todas</option>
-                      {categories.map((c) => (
-                        <option key={c} value={c}>
-                          {c}
-                        </option>
-                      ))}
-                    </CFormSelect>
-                  </div>
+              <CRow className="align-items-end g-3">
+                <CCol md={4}>
+                  <CFormLabel>Filtrar por título</CFormLabel>
+                  <CInputGroup>
+                    <CFormInput
+                      placeholder="Título"
+                      value={titleFilter}
+                      onChange={(event) => setTitleFilter(event.target.value)}
+                    />
+                  </CInputGroup>
                 </CCol>
-                <CCol md={4} className="d-flex justify-content-end">
-                  <CButton color="primary" onClick={handleCreate}>
+                <CCol md={3}>
+                  <CFormLabel>Filtrar por autor</CFormLabel>
+                  <CFormSelect
+                    value={authorFilter}
+                    onChange={(event) => setAuthorFilter(event.target.value)}
+                  >
+                    <option value="">Todos</option>
+                    {authors.map((author) => (
+                      <option key={author.id} value={author.id}>
+                        {author.name || author.email}
+                      </option>
+                    ))}
+                  </CFormSelect>
+                </CCol>
+                <CCol md={3}>
+                  <CFormLabel>Filtrar por categoría</CFormLabel>
+                  <CFormSelect
+                    value={categoryFilter}
+                    onChange={(event) => setCategoryFilter(event.target.value)}
+                  >
+                    <option value="">Todas</option>
+                    {categoryOptions.map((category) => (
+                      <option key={category.id} value={category.id}>
+                        {category.name}
+                      </option>
+                    ))}
+                  </CFormSelect>
+                </CCol>
+                <CCol md={2} className="d-flex justify-content-end">
+                  <CButton color="primary" onClick={openCreate}>
                     Crear publicación
                   </CButton>
                 </CCol>
               </CRow>
             </CCardHeader>
             <CCardBody>
-              <CTable hover responsive>
-                <CTableHead>
-                  <CTableRow>
-                    <CTableHeaderCell>ID</CTableHeaderCell>
-                    <CTableHeaderCell>Autor</CTableHeaderCell>
-                    <CTableHeaderCell>Título</CTableHeaderCell>
-                    <CTableHeaderCell>Contenido</CTableHeaderCell>
-                    <CTableHeaderCell>Estado</CTableHeaderCell>
-                    <CTableHeaderCell>Creado</CTableHeaderCell>
-                    <CTableHeaderCell>Editado</CTableHeaderCell>
-                    <CTableHeaderCell style={{ width: 140 }}>Acciones</CTableHeaderCell>
-                  </CTableRow>
-                </CTableHead>
-                <CTableBody>
-                  {filtered.map((p) => (
-                    <CTableRow key={p.id} className="align-middle">
-                      <CTableDataCell>{p.id}</CTableDataCell>
-                      <CTableDataCell>
-                        {usersList[p.user_id] || usersList[p.author_id] || p.user_id}
-                      </CTableDataCell>
-                      <CTableDataCell>
-                        <div style={{ fontWeight: 700 }}>{p.title}</div>
-                      </CTableDataCell>
-                      <CTableDataCell
-                        style={{
-                          maxWidth: 400,
-                          whiteSpace: 'nowrap',
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis',
-                        }}
-                      >
-                        {p.content}
-                      </CTableDataCell>
-                      <CTableDataCell>
-                        <CBadge
-                          color={
-                            isPublished(p)
-                              ? 'success'
-                              : p.status === 'pending_approval'
-                                ? 'warning'
-                                : 'secondary'
-                          }
-                        >
-                          {p.status}
-                        </CBadge>
-                      </CTableDataCell>
-                      <CTableDataCell>{formatDate(p.created_at || p.createdAt)}</CTableDataCell>
-                      <CTableDataCell>{formatDate(p.updated_at || p.updatedAt)}</CTableDataCell>
-                      <CTableDataCell>
-                        <CButton
-                          size="sm"
-                          color="transparent"
-                          className="me-2"
-                          title="Editar"
-                          onClick={() => handleEdit(p)}
-                        >
-                          <CIcon icon={cilPencil} />
-                        </CButton>
-                        <CButton
-                          size="sm"
-                          color="transparent"
-                          className="me-2 text-danger"
-                          title="Eliminar"
-                          onClick={() => handleDelete(p)}
-                        >
-                          <CIcon icon={cilTrash} />
-                        </CButton>
-                        <CButton
-                          size="sm"
-                          color={isPublished(p) ? 'success' : 'warning'}
-                          title={isPublished(p) ? 'Marcar como pendiente' : 'Publicar'}
-                          onClick={() => handleApprove(p)}
-                        >
-                          <CIcon icon={cilCheck} />
-                        </CButton>
-                      </CTableDataCell>
+              {loading ? (
+                <div className="text-center py-5">
+                  <CSpinner />
+                </div>
+              ) : (
+                <CTable hover responsive>
+                  <CTableHead>
+                    <CTableRow>
+                      <CTableHeaderCell>ID</CTableHeaderCell>
+                      <CTableHeaderCell>Autor</CTableHeaderCell>
+                      <CTableHeaderCell>Título</CTableHeaderCell>
+                      <CTableHeaderCell>Contenido</CTableHeaderCell>
+                      <CTableHeaderCell>Estado</CTableHeaderCell>
+                      <CTableHeaderCell>Creado</CTableHeaderCell>
+                      <CTableHeaderCell>Editado</CTableHeaderCell>
+                      <CTableHeaderCell style={{ width: 140 }}>Acciones</CTableHeaderCell>
                     </CTableRow>
-                  ))}
-                </CTableBody>
-              </CTable>
+                  </CTableHead>
+                  <CTableBody>
+                    {filtered.map((post) => (
+                      <CTableRow key={post.id} className="align-middle">
+                        <CTableDataCell>{post.id}</CTableDataCell>
+                        <CTableDataCell>
+                          {authorNameById.get(String(post.author_id || post.user_id)) ||
+                            post.author_id ||
+                            post.user_id}
+                        </CTableDataCell>
+                        <CTableDataCell>
+                          <strong>{post.title}</strong>
+                        </CTableDataCell>
+                        <CTableDataCell
+                          style={{
+                            maxWidth: 400,
+                            whiteSpace: 'nowrap',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                          }}
+                        >
+                          {post.content}
+                        </CTableDataCell>
+                        <CTableDataCell>
+                          <CBadge color={statusColor[post.status] || 'secondary'}>
+                            {post.status}
+                          </CBadge>
+                        </CTableDataCell>
+                        <CTableDataCell>{formatDate(post.created_at)}</CTableDataCell>
+                        <CTableDataCell>{formatDate(post.updated_at)}</CTableDataCell>
+                        <CTableDataCell>
+                          <CButton
+                            size="sm"
+                            color="transparent"
+                            className="me-2"
+                            title="Editar"
+                            onClick={() => openEdit(post)}
+                          >
+                            <CIcon icon={cilPencil} />
+                          </CButton>
+                          <CButton
+                            size="sm"
+                            color="transparent"
+                            className="me-2 text-danger"
+                            title="Eliminar"
+                            onClick={() => deletePost(post)}
+                          >
+                            <CIcon icon={cilTrash} />
+                          </CButton>
+                          <CButton
+                            size="sm"
+                            color={isPublished(post) ? 'success' : 'warning'}
+                            title={isPublished(post) ? 'Marcar como pendiente' : 'Publicar'}
+                            onClick={() => toggleStatus(post)}
+                          >
+                            <CIcon icon={cilCheck} />
+                          </CButton>
+                        </CTableDataCell>
+                      </CTableRow>
+                    ))}
+                  </CTableBody>
+                </CTable>
+              )}
             </CCardBody>
           </CCard>
         </CCol>
       </CRow>
 
-      <CModal visible={showCreate} onClose={() => setShowCreate(false)}>
+      <CModal visible={showCreate} onClose={closeCreate}>
         <CModalHeader>
           <CModalTitle>Crear publicación</CModalTitle>
         </CModalHeader>
         <CModalBody>
           <CForm>
-            <div className="mb-3">
-              <CFormLabel>Usuario</CFormLabel>
-              <CFormSelect
-                value={createForm.user}
-                onChange={(e) => setCreateForm({ ...createForm, user: e.target.value })}
-              >
-                <option value="">Selecciona...</option>
-                {Array.isArray(usersList)
-                  ? usersList.map((u) => (
-                      <option key={u.id || u} value={u.id ?? u}>
-                        {u.fullName ??
-                          `${u.nombre || u.first_name || ''} ${u.apellido || u.last_name || ''}`.trim()}
-                      </option>
-                    ))
-                  : Object.entries(usersList || {}).map(([id, name]) => (
-                      <option key={id} value={id}>
-                        {name}
-                      </option>
-                    ))}
-              </CFormSelect>
-            </div>
-
-            <div className="mb-3">
-              <CFormLabel>Contenido</CFormLabel>
-              <CFormInput
-                value={createForm.content}
-                onChange={(e) => setCreateForm({ ...createForm, content: e.target.value })}
-              />
-            </div>
-            <div className="mb-3">
-              <CFormLabel>Título</CFormLabel>
-              <CFormInput
-                value={createForm.title}
-                onChange={(e) => setCreateForm({ ...createForm, title: e.target.value })}
-              />
-            </div>
-            <div className="mb-3">
-              <CFormLabel>Categoría</CFormLabel>
-              <CFormSelect
-                value={createForm.category}
-                onChange={(e) => setCreateForm({ ...createForm, category: e.target.value })}
-              >
-                {categories.map((c) => (
-                  <option key={c} value={c}>
-                    {c}
-                  </option>
-                ))}
-              </CFormSelect>
-            </div>
+            <PostForm
+              form={createForm}
+              setForm={setCreateForm}
+              authors={authors}
+              categories={categoryOptions}
+            />
           </CForm>
         </CModalBody>
         <CModalFooter>
-          <CButton color="secondary" onClick={() => setShowCreate(false)}>
+          <CButton color="secondary" onClick={closeCreate}>
             Cancelar
           </CButton>
-          <CButton color="primary" onClick={handleSaveCreate}>
-            Crear
+          <CButton color="primary" disabled={saving} onClick={saveCreate}>
+            {saving ? 'Guardando...' : 'Crear'}
           </CButton>
         </CModalFooter>
       </CModal>
-      <CModal visible={showEdit} onClose={() => setShowEdit(false)}>
+
+      <CModal visible={showEdit} onClose={closeEdit}>
         <CModalHeader>
           <CModalTitle>Editar publicación</CModalTitle>
         </CModalHeader>
         <CModalBody>
           <CForm>
-            <div className="mb-3">
-              <CFormLabel>Usuario</CFormLabel>
-              <CFormSelect
-                value={editForm.user}
-                onChange={(e) => setEditForm({ ...editForm, user: e.target.value })}
-              >
-                <option value="">Selecciona...</option>
-                {Object.entries(usersList || {}).map(([id, name]) => (
-                  <option key={id} value={id}>
-                    {name}
-                  </option>
-                ))}
-              </CFormSelect>
-            </div>
-
-            <div className="mb-3">
-              <CFormLabel>Título</CFormLabel>
-              <CFormInput
-                value={editForm.title}
-                onChange={(e) => setEditForm({ ...editForm, title: e.target.value })}
-              />
-            </div>
-
-            <div className="mb-3">
-              <CFormLabel>Contenido</CFormLabel>
-              <CFormInput
-                value={editForm.content}
-                onChange={(e) => setEditForm({ ...editForm, content: e.target.value })}
-              />
-            </div>
-
-            <div className="mb-3">
-              <CFormLabel>Categoría</CFormLabel>
-              <CFormSelect
-                value={editForm.category}
-                onChange={(e) => setEditForm({ ...editForm, category: e.target.value })}
-              >
-                <option value="">Selecciona...</option>
-                {categories.map((c) => (
-                  <option key={c} value={c}>
-                    {c}
-                  </option>
-                ))}
-              </CFormSelect>
-            </div>
+            <PostForm
+              form={editForm}
+              setForm={setEditForm}
+              authors={authors}
+              categories={categoryOptions}
+            />
           </CForm>
         </CModalBody>
         <CModalFooter>
-          <CButton color="secondary" onClick={() => setShowEdit(false)}>
+          <CButton color="secondary" onClick={closeEdit}>
             Cancelar
           </CButton>
-          <CButton color="primary" onClick={handleSaveEdit}>
-            Guardar cambios
+          <CButton color="primary" disabled={saving} onClick={saveEdit}>
+            {saving ? 'Guardando...' : 'Guardar cambios'}
           </CButton>
         </CModalFooter>
       </CModal>
     </>
   )
 }
+
+const PostForm = ({ form, setForm, authors, categories }) => (
+  <>
+    <div className="mb-3">
+      <CFormLabel>Autor</CFormLabel>
+      <CFormSelect
+        value={form.author_id}
+        onChange={(event) => setForm({ ...form, author_id: event.target.value })}
+      >
+        <option value="">Seleccione un autor</option>
+        {authors.map((author) => (
+          <option key={author.id} value={author.id}>
+            {author.name || author.email}
+          </option>
+        ))}
+      </CFormSelect>
+    </div>
+
+    <div className="mb-3">
+      <CFormLabel>Título</CFormLabel>
+      <CFormInput
+        value={form.title}
+        onChange={(event) => setForm({ ...form, title: event.target.value })}
+      />
+    </div>
+
+    <div className="mb-3">
+      <CFormLabel>Contenido</CFormLabel>
+      <CFormTextarea
+        rows={4}
+        value={form.content}
+        onChange={(event) => setForm({ ...form, content: event.target.value })}
+      />
+    </div>
+
+    <div className="mb-3">
+      <CFormLabel>Categoría</CFormLabel>
+      <CFormSelect
+        value={form.category_id}
+        onChange={(event) => setForm({ ...form, category_id: event.target.value })}
+      >
+        <option value="">Seleccione una categoría</option>
+        {categories.map((category) => (
+          <option key={category.id} value={category.id}>
+            {category.name}
+          </option>
+        ))}
+      </CFormSelect>
+    </div>
+  </>
+)
 
 export default Post
