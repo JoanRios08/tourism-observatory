@@ -8,6 +8,7 @@ import {
   CCardBody,
   CCardHeader,
   CCol,
+  CFormFeedback,
   CFormInput,
   CFormLabel,
   CFormSelect,
@@ -33,6 +34,7 @@ import { cilLowVision, cilViewColumn } from '@coreui/icons'
 const initialCreateForm = {
   first_name: '',
   last_name: '',
+  dni_type: 'V',
   dni: '',
   email: '',
   password: '',
@@ -54,6 +56,11 @@ const initialEditForm = {
 const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const alphanumericRegex = /^[a-zA-Z0-9]+$/
 
+const getCreateDniValue = (form) => {
+  const dni = form.dni.trim()
+  return dni ? `${form.dni_type}-${dni}` : ''
+}
+
 const roleColor = (roleLabel) => {
   const role = String(roleLabel || '').toLowerCase()
   if (role.includes('admin')) return 'primary'
@@ -62,38 +69,47 @@ const roleColor = (roleLabel) => {
   return 'secondary'
 }
 
-const validateCreateUserForm = (form) => {
+const validateCreateUserFields = (form) => {
+  const errors = {}
   const firstName = form.first_name.trim()
   const lastName = form.last_name.trim()
   const dni = form.dni.trim()
   const email = form.email.trim()
   const password = form.password
 
-  if (!firstName || !email || !password.trim()) {
-    return 'Nombre, email y contraseña son obligatorios.'
-  }
-
-  if (dni.startsWith('0')) {
-    return 'La cédula de identidad no puede comenzar con el número 0.'
+  if (!firstName) {
+    errors.first_name = 'El nombre es obligatorio.'
   }
 
   if ((firstName + lastName).length > 40) {
-    return 'La suma del nombre y apellido no puede superar los 40 caracteres.'
+    errors.first_name = 'La suma del nombre y apellido no puede superar los 40 caracteres.'
+    errors.last_name = 'La suma del nombre y apellido no puede superar los 40 caracteres.'
   }
 
-  if (!emailRegex.test(email)) {
-    return 'Ingresa un email válido. Ejemplo: usuario@dominio.com.'
+  if (dni.startsWith('0')) {
+    errors.dni = 'La cédula de identidad no puede comenzar con el número 0.'
   }
 
-  if (password.length < 6 || !alphanumericRegex.test(password)) {
-    return 'La contraseña debe tener al menos 6 caracteres y contener solo letras y números.'
+  if (!email) {
+    errors.email = 'El email es obligatorio.'
+  } else if (!emailRegex.test(email)) {
+    errors.email = 'Ingresa un email válido. Ejemplo: usuario@dominio.com.'
   }
 
-  if (form.password !== form.confirm_password) {
-    return 'La contraseña y su confirmación deben coincidir.'
+  if (!password.trim()) {
+    errors.password = 'La contraseña es obligatoria.'
+  } else if (password.length < 6 || !alphanumericRegex.test(password)) {
+    errors.password =
+      'La contraseña debe tener al menos 6 caracteres y contener solo letras y números.'
   }
 
-  return ''
+  if (!form.confirm_password.trim()) {
+    errors.confirm_password = 'Confirma la contraseña.'
+  } else if (form.password !== form.confirm_password) {
+    errors.confirm_password = 'La contraseña y su confirmación deben coincidir.'
+  }
+
+  return errors
 }
 
 const Users = () => {
@@ -146,6 +162,9 @@ const Users = () => {
     })
   }, [search, users])
 
+  const createErrors = useMemo(() => validateCreateUserFields(createForm), [createForm])
+  const canCreateUser = Object.keys(createErrors).length === 0
+
   const openCreate = () => {
     setCreateForm(initialCreateForm)
     setShowCreatePassword(false)
@@ -170,9 +189,7 @@ const Users = () => {
   }
 
   const handleSaveCreate = async () => {
-    const validationError = validateCreateUserForm(createForm)
-    if (validationError) {
-      alert(validationError)
+    if (!canCreateUser) {
       return
     }
 
@@ -180,7 +197,7 @@ const Users = () => {
       await userApi.createUser({
         first_name: createForm.first_name.trim(),
         last_name: createForm.last_name.trim(),
-        dni: createForm.dni.trim(),
+        dni: getCreateDniValue(createForm),
         email: createForm.email.trim(),
         password: createForm.password,
         role_id: Number(createForm.role_id),
@@ -340,36 +357,56 @@ const Users = () => {
           <div className="mb-3">
             <CFormLabel>Nombre</CFormLabel>
             <CFormInput
+              invalid={Boolean(createErrors.first_name)}
               value={createForm.first_name}
               onChange={(event) => setCreateForm({ ...createForm, first_name: event.target.value })}
             />
+            <CFormFeedback invalid>{createErrors.first_name}</CFormFeedback>
           </div>
           <div className="mb-3">
             <CFormLabel>Apellido</CFormLabel>
             <CFormInput
+              invalid={Boolean(createErrors.last_name)}
               value={createForm.last_name}
               onChange={(event) => setCreateForm({ ...createForm, last_name: event.target.value })}
             />
+            <CFormFeedback invalid>{createErrors.last_name}</CFormFeedback>
           </div>
           <div className="mb-3">
             <CFormLabel>Cédula</CFormLabel>
-            <CFormInput
-              value={createForm.dni}
-              onChange={(event) => setCreateForm({ ...createForm, dni: event.target.value })}
-            />
+            <CInputGroup className="has-validation">
+              <CFormSelect
+                value={createForm.dni_type}
+                onChange={(event) => setCreateForm({ ...createForm, dni_type: event.target.value })}
+                style={{ maxWidth: 88 }}
+              >
+                <option value="V">V</option>
+                <option value="E">E</option>
+                <option value="J">J</option>
+              </CFormSelect>
+              <CFormInput
+                invalid={Boolean(createErrors.dni)}
+                value={createForm.dni}
+                onChange={(event) => setCreateForm({ ...createForm, dni: event.target.value })}
+              />
+              <CFormFeedback invalid>{createErrors.dni}</CFormFeedback>
+            </CInputGroup>
           </div>
           <div className="mb-3">
             <CFormLabel>Email</CFormLabel>
             <CFormInput
+              invalid={Boolean(createErrors.email)}
               type="email"
               value={createForm.email}
               onChange={(event) => setCreateForm({ ...createForm, email: event.target.value })}
             />
+            <CFormFeedback invalid>{createErrors.email}</CFormFeedback>
           </div>
           <div className="mb-3">
             <CFormLabel>Contraseña</CFormLabel>
-            <CInputGroup>
+            <CInputGroup className="has-validation">
               <CFormInput
+                invalid={Boolean(createErrors.password)}
                 type={showCreatePassword ? 'text' : 'password'}
                 value={createForm.password}
                 onChange={(event) => setCreateForm({ ...createForm, password: event.target.value })}
@@ -382,12 +419,14 @@ const Users = () => {
               >
                 <CIcon icon={showCreatePassword ? cilLowVision : cilViewColumn} />
               </CButton>
+              <CFormFeedback invalid>{createErrors.password}</CFormFeedback>
             </CInputGroup>
           </div>
           <div className="mb-3">
             <CFormLabel>Confirmar contraseña</CFormLabel>
-            <CInputGroup>
+            <CInputGroup className="has-validation">
               <CFormInput
+                invalid={Boolean(createErrors.confirm_password)}
                 type={showCreateConfirmPassword ? 'text' : 'password'}
                 value={createForm.confirm_password}
                 onChange={(event) =>
@@ -402,6 +441,7 @@ const Users = () => {
               >
                 <CIcon icon={showCreateConfirmPassword ? cilLowVision : cilViewColumn} />
               </CButton>
+              <CFormFeedback invalid>{createErrors.confirm_password}</CFormFeedback>
             </CInputGroup>
           </div>
           <div className="mb-3">
@@ -422,7 +462,7 @@ const Users = () => {
           <CButton color="secondary" onClick={() => setShowCreate(false)}>
             Cancelar
           </CButton>
-          <CButton color="primary" onClick={handleSaveCreate}>
+          <CButton color="primary" disabled={!canCreateUser} onClick={handleSaveCreate}>
             Guardar
           </CButton>
         </CModalFooter>
