@@ -89,7 +89,7 @@ const Profile = () => {
         ...data,
         id: data.id ?? data.user_id ?? data.userId ?? userId,
         role_id: data.role_id || data.roleId || info?.role_id,
-        rol_name: data.rol_name || info?.rol_name,
+        role_name: data.role_name || info?.role_name,
       })
 
       setUserData(profile)
@@ -321,9 +321,7 @@ const Profile = () => {
                 <CFormInput
                   type={showConfirmPassword ? 'text' : 'password'}
                   value={form.confirm_password}
-                  onChange={(event) =>
-                    setForm({ ...form, confirm_password: event.target.value })
-                  }
+                  onChange={(event) => setForm({ ...form, confirm_password: event.target.value })}
                   placeholder="Repite la nueva contrasena"
                 />
                 <CButton

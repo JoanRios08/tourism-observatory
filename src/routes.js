@@ -6,9 +6,9 @@ const Profile = React.lazy(() => import('./views/profile/Profile'))
 const Charts = React.lazy(() => import('./views/charts/Charts'))
 const Widgets = React.lazy(() => import('./views/widgets/Widgets'))
 const Post = React.lazy(() => import('./views/post/Post'))
+const ApprovedPosts = React.lazy(() => import('./views/post/ApprovedPosts'))
 const Projects = React.lazy(() => import('./views/projects/Projects'))
 const Documents = React.lazy(() => import('./views/documents/Documents'))
-
 
 const routes = [
   { path: '/', exact: true, name: 'Home' },
@@ -18,9 +18,9 @@ const routes = [
   { path: '/charts', name: 'Charts', element: Charts },
   { path: '/widgets', name: 'Widgets', element: Widgets },
   { path: '/post', name: 'Post', element: Post },
+  { path: '/approved-posts', name: 'Publicaciones aprobadas', element: ApprovedPosts },
   { path: '/projects', name: 'Proyectos', element: Projects },
   { path: '/documents', name: 'Documentos', element: Documents },
-
 ]
 
 export default routes

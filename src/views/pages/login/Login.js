@@ -117,6 +117,10 @@ const Login = () => {
 
     try {
       const response = await authApi.recoverPassword({ email: email.trim() })
+      if (response?.unsupported) {
+        setError(response.message)
+        return
+      }
       const message =
         response?.message ||
         'Si el correo existe, recibirás instrucciones para recuperar tu contraseña'

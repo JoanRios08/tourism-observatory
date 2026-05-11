@@ -31,6 +31,12 @@ const _nav = [
   },
   {
     component: CNavItem,
+    name: 'Aprobadas',
+    to: '/approved-posts',
+    icon: <CIcon icon={cilNotes} customClassName="nav-icon" />,
+  },
+  {
+    component: CNavItem,
     name: 'Proyectos',
     to: '/projects',
     icon: <CIcon icon={cilFolderOpen} customClassName="nav-icon" />,

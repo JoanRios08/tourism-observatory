@@ -26,8 +26,12 @@ const authApi = {
     }
   },
   recoverPassword: async (emailData) => {
-    const { data } = await axiosClient.post('/auth/recover_password', emailData)
-    return data
+    return {
+      ok: false,
+      unsupported: true,
+      email: emailData?.email,
+      message: 'El backend actual no expone recuperacion de contrasena.',
+    }
   },
 }
 

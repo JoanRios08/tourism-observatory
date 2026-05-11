@@ -11,7 +11,13 @@ export const saveAuthData = (data, username) => {
   if (!data) return false
   let token = null
   if (typeof data === 'string') token = data
-  else token = data.token || data.access_token || data.authToken || data.jwt || (data.data && (data.data.token || data.data.access_token))
+  else
+    token =
+      data.token ||
+      data.access_token ||
+      data.authToken ||
+      data.jwt ||
+      (data.data && (data.data.token || data.data.access_token))
   if (!token) return false
   localStorage.setItem(AUTH_TOKEN_KEY, token)
   if (username) localStorage.setItem(AUTH_USER_KEY, username)
@@ -35,7 +41,7 @@ export const getUserInfoFromToken = () => {
       email: decoded.email || null,
       community_id: decoded.community_id || null,
       role_id: decoded.role_id || null,
-      rol_name: decoded.rol_name || null,
+      role_name: decoded.role_name || decoded.rol_name || null,
     }
   } catch {
     return null
