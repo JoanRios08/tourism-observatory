@@ -36,8 +36,10 @@ import { extractCollection, formatDate } from '../../utils/observatoryAdapters'
 const initialForm = { author_id: '', title: '', category_id: '', content: '' }
 
 const statusColor = {
+  approved: 'success',
   published: 'success',
   pending_approval: 'warning',
+  rejected: 'danger',
   draft: 'secondary',
 }
 
@@ -53,8 +55,9 @@ const fallbackCategories = [
 ]
 
 const normalizePostStatus = (post) => {
+  if (post.status === 'published') return 'approved'
   if (post.status) return post.status
-  if (post.approved === true) return 'published'
+  if (post.approved === true) return 'approved'
   if (post.approved === false) return 'pending_approval'
   return ''
 }
@@ -98,9 +101,9 @@ const getPostPayload = (form, status = 'pending_approval') => {
   }
 }
 
-const isPublished = (post) => normalizePostStatus(post) === 'published'
+const isApproved = (post) => normalizePostStatus(post) === 'approved'
 
-const getNextPostStatus = (post) => (isPublished(post) ? 'pending_approval' : 'published')
+const getNextPostStatus = (post) => (isApproved(post) ? 'pending_approval' : 'approved')
 
 const Post = () => {
   const [authors, setAuthors] = useState([])
@@ -429,8 +432,8 @@ const Post = () => {
                           </CButton>
                           <CButton
                             size="sm"
-                            color={isPublished(post) ? 'success' : 'warning'}
-                            title={isPublished(post) ? 'Marcar como pendiente' : 'Publicar'}
+                            color={isApproved(post) ? 'success' : 'warning'}
+                            title={isApproved(post) ? 'Marcar como pendiente' : 'Aprobar'}
                             onClick={() => toggleStatus(post)}
                           >
                             <CIcon icon={cilCheck} />

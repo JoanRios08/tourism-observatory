@@ -27,15 +27,14 @@ import {
 } from '@coreui/react'
 import CIcon from '@coreui/icons-react'
 import { cilPencil, cilTrash } from '@coreui/icons'
+import authorsApi from '../../api/endpoints/authorsApi'
 import documentsApi from '../../api/endpoints/documentsApi'
 import projectsApi from '../../api/endpoints/projectsApi'
-import userApi from '../../api/endpoints/usersApi'
 import {
   extractCollection,
   getUserDisplayName,
   normalizeDocument,
   normalizeProject,
-  normalizeUser,
 } from '../../utils/observatoryAdapters'
 
 const initialForm = {
@@ -51,7 +50,7 @@ const initialForm = {
 const Documents = () => {
   const [documents, setDocuments] = useState([])
   const [projects, setProjects] = useState([])
-  const [users, setUsers] = useState([])
+  const [authors, setAuthors] = useState([])
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
@@ -67,29 +66,29 @@ const Documents = () => {
     setError('')
 
     try {
-      const [documentsResponse, projectsResponse, usersResponse] = await Promise.all([
+      const [documentsResponse, projectsResponse, authorsResponse] = await Promise.all([
         documentsApi.getDocuments(true),
         projectsApi.getProjects(),
-        userApi.getUsers(),
+        authorsApi.getAuthors(),
       ])
 
-      const userItems = extractCollection(usersResponse.data, ['users']).map(normalizeUser)
+      const authorItems = extractCollection(authorsResponse.data, ['authors'])
       const projectItems = extractCollection(projectsResponse.data, ['projects']).map(
         normalizeProject,
       )
       const projectsById = new Map(projectItems.map((project) => [project.id, project]))
-      const usersById = new Map(userItems.map((user) => [user.id, user]))
+      const authorsById = new Map(authorItems.map((author) => [author.id, author]))
 
       const documentItems = extractCollection(documentsResponse.data, ['documents']).map(
-        (document) => normalizeDocument(document, projectsById, usersById),
+        (document) => normalizeDocument(document, projectsById, authorsById),
       )
 
-      setUsers(userItems)
+      setAuthors(authorItems)
       setProjects(projectItems)
       setDocuments(documentItems)
     } catch (fetchError) {
       console.error('Error loading documents', fetchError)
-      setUsers([])
+      setAuthors([])
       setProjects([])
       setDocuments([])
       setError('No se pudieron cargar los documentos.')
@@ -121,7 +120,7 @@ const Documents = () => {
 
   const openCreate = () => {
     setEditingId(null)
-    setForm({ ...initialForm, author_id: users[0]?.id ? String(users[0].id) : '' })
+    setForm({ ...initialForm, author_id: authors[0]?.id ? String(authors[0].id) : '' })
     setModalVisible(true)
   }
 
@@ -263,9 +262,9 @@ const Documents = () => {
                 onChange={(event) => setAuthorFilter(event.target.value)}
               >
                 <option value="">Todos</option>
-                {users.map((user) => (
-                  <option key={user.id} value={user.id}>
-                    {getUserDisplayName(user)}
+                {authors.map((author) => (
+                  <option key={author.id} value={author.id}>
+                    {getUserDisplayName(author)}
                   </option>
                 ))}
               </CFormSelect>
@@ -374,9 +373,9 @@ const Documents = () => {
               onChange={(event) => setForm({ ...form, author_id: event.target.value })}
             >
               <option value="">Seleccione un autor</option>
-              {users.map((user) => (
-                <option key={user.id} value={user.id}>
-                  {getUserDisplayName(user)}
+              {authors.map((author) => (
+                <option key={author.id} value={author.id}>
+                  {getUserDisplayName(author)}
                 </option>
               ))}
             </CFormSelect>

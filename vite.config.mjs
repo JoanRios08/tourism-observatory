@@ -4,6 +4,13 @@ import path from 'node:path'
 import autoprefixer from 'autoprefixer'
 
 export default defineConfig(() => {
+  const backendTarget = process.env.VITE_API_BASE || process.env.API_BASE || 'http://localhost:4000'
+  const proxyOptions = {
+    target: backendTarget,
+    changeOrigin: true,
+    secure: false,
+  }
+
   return {
     base: './',
     build: {
@@ -40,43 +47,13 @@ export default defineConfig(() => {
     server: {
       port: 3000,
       proxy: {
-        // Proxy API requests to the remote backend during development to avoid CORS.
-        // Adjust the target if your backend runs elsewhere.
-        '/api': {
-          target: 'https://backend-observatory.onrender.com',
-          changeOrigin: true,
-          secure: false,
-        },
-        '/auth': {
-          target: 'https://backend-observatory.onrender.com',
-          changeOrigin: true,
-          secure: false,
-        },
-        '/login': {
-          target: 'https://backend-observatory.onrender.com',
-          changeOrigin: true,
-          secure: false,
-        },
-        '/users': {
-          target: 'https://backend-observatory.onrender.com',
-          changeOrigin: true,
-          secure: false,
-        },
-        '/projects': {
-          target: 'https://backend-observatory.onrender.com',
-          changeOrigin: true,
-          secure: false,
-        },
-        '/documents': {
-          target: 'https://backend-observatory.onrender.com',
-          changeOrigin: true,
-          secure: false,
-        },
-        '/posts': {
-      target: 'https://backend-observatory.onrender.com',
-      changeOrigin: true,
-      secure: false,
-    },
+        '/login': proxyOptions,
+        '/users': proxyOptions,
+        '/authors': proxyOptions,
+        '/projects': proxyOptions,
+        '/documents': proxyOptions,
+        '/posts': proxyOptions,
+        '/dashboard': proxyOptions,
       },
     },
   }

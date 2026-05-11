@@ -13,7 +13,6 @@ const userApi = {
       return Promise.reject(err)
     }),
   deleteUser: (id) => axiosClient.delete(`/users/${id}`),
-  getLeaders: () => axiosClient.get('/users/leaders'),
 }
 
 export default userApi

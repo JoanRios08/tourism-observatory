@@ -1,7 +1,11 @@
 import axios from 'axios'
 import { getToken, logout } from './auth'
 
-const baseURL = (import.meta?.env?.VITE_API_BASE) || window.__API_BASE__ || 'http://localhost:3001'
+const envBase = import.meta?.env?.VITE_API_BASE ?? window.__API_BASE__ ?? ''
+const isLocalhost =
+  typeof window !== 'undefined' &&
+  (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
+const baseURL = isLocalhost ? '' : envBase
 
 const api = axios.create({
   baseURL,
