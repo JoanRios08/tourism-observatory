@@ -1,10 +1,7 @@
 import axios from 'axios'
 
 const envBase = import.meta?.env?.VITE_API_BASE ?? window.__API_BASE__ ?? ''
-const isLocalhost =
-  typeof window !== 'undefined' &&
-  (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
-const baseURL = isLocalhost ? '' : envBase || 'https://backend-observatory.onrender.com'
+const baseURL = envBase || 'https://backend-observatory.onrender.com'
 
 const axiosClient = axios.create({
   baseURL,
@@ -14,7 +11,7 @@ const axiosClient = axios.create({
 })
 
 try {
-  console.debug('axiosClient baseURL resolved to:', baseURL, 'isLocalhost:', isLocalhost)
+  console.debug('axiosClient baseURL resolved to:', baseURL)
 } catch (e) {
   // ignore
 }

@@ -105,6 +105,15 @@ const isApproved = (post) => normalizePostStatus(post) === 'approved'
 
 const getNextPostStatus = (post) => (isApproved(post) ? 'pending_approval' : 'approved')
 
+const getApiErrorMessage = (error) => {
+  const details = error.response?.data?.details
+  if (Array.isArray(details) && details.length > 0) {
+    return details.map((detail) => detail.message).join(', ')
+  }
+
+  return error.response?.data?.error || error.response?.data?.message || error.message
+}
+
 const Post = () => {
   const [authors, setAuthors] = useState([])
   const [posts, setPosts] = useState([])
@@ -278,18 +287,7 @@ const Post = () => {
     const newStatus = getNextPostStatus(post)
 
     try {
-      await postsApi.updatePost(
-        post.id,
-        getPostPayload(
-          {
-            author_id: post.author_id || post.user_id,
-            title: post.title,
-            category_id: post.category_id,
-            content: post.content,
-          },
-          newStatus,
-        ),
-      )
+      await postsApi.updatePostStatus(post.id, newStatus)
 
       setPosts((current) =>
         current.map((item) =>
@@ -300,12 +298,7 @@ const Post = () => {
       )
     } catch (statusError) {
       console.error('Error cambiando estado', statusError)
-      alert(
-        'Error cambiando estado: ' +
-          (statusError.response?.data?.error ||
-            statusError.response?.data?.message ||
-            statusError.message),
-      )
+      alert(`Error cambiando estado: ${getApiErrorMessage(statusError)}`)
     }
   }
 

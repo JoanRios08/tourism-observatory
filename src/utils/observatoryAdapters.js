@@ -61,6 +61,19 @@ export const normalizeUser = (user) => ({
   updatedLabel: formatDate(user.updated_at || user.updatedAt),
 })
 
+export const normalizeAuthor = (author) => ({
+  ...author,
+  id: author.id ?? null,
+  name: author.name || '',
+  bio: author.bio || '',
+  email: author.email || '',
+  documents: Array.isArray(author.documents) ? author.documents : [],
+  posts: Array.isArray(author.posts) ? author.posts : [],
+  projects: Array.isArray(author.projects) ? author.projects : [],
+  createdLabel: formatDate(author.created_at || author.createdAt),
+  updatedLabel: formatDate(author.updated_at || author.updatedAt),
+})
+
 export const normalizeProject = (project) => ({
   ...project,
   id: project.id,

@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   CAlert,
   CBadge,
@@ -8,6 +8,7 @@ import {
   CCardHeader,
   CCol,
   CForm,
+  CFormFeedback,
   CFormInput,
   CFormLabel,
   CImage,
@@ -34,6 +35,49 @@ const initialForm = {
   password: '',
   confirm_password: '',
   role_id: 1,
+}
+
+const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+const alphanumericRegex = /^[a-zA-Z0-9]+$/
+
+const validateProfileFields = (form) => {
+  const errors = {}
+  const firstName = form.first_name.trim()
+  const lastName = form.last_name.trim()
+  const email = form.email.trim()
+  const password = form.password
+
+  if (!firstName) {
+    errors.first_name = 'El nombre es obligatorio.'
+  }
+
+  if ((firstName + lastName).length > 40) {
+    errors.first_name = 'La suma del nombre y apellido no puede superar los 40 caracteres.'
+    errors.last_name = 'La suma del nombre y apellido no puede superar los 40 caracteres.'
+  }
+
+  if (!email) {
+    errors.email = 'El email es obligatorio.'
+  } else if (!emailRegex.test(email)) {
+    errors.email = 'Ingresa un email valido. Ejemplo: usuario@dominio.com.'
+  }
+
+  if (form.password || form.confirm_password) {
+    if (!password.trim()) {
+      errors.password = 'La contrasena es obligatoria.'
+    } else if (password.length < 6 || !alphanumericRegex.test(password)) {
+      errors.password =
+        'La contrasena debe tener al menos 6 caracteres y contener solo letras y numeros.'
+    }
+
+    if (!form.confirm_password.trim()) {
+      errors.confirm_password = 'Confirma la contrasena.'
+    } else if (form.password !== form.confirm_password) {
+      errors.confirm_password = 'La contrasena y su confirmacion deben coincidir.'
+    }
+  }
+
+  return errors
 }
 
 const normalizeProfile = (user) => {
@@ -68,6 +112,8 @@ const Profile = () => {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false)
   const [userData, setUserData] = useState(null)
   const [form, setForm] = useState(initialForm)
+  const formErrors = useMemo(() => validateProfileFields(form), [form])
+  const canSaveProfile = Object.keys(formErrors).length === 0 && !saving
 
   const loadProfile = useCallback(async () => {
     setLoading(true)
@@ -141,21 +187,9 @@ const Profile = () => {
   }
 
   const handleSaveEdit = async () => {
-    if (!form.id || !form.first_name.trim() || !form.email.trim()) {
-      alert('Nombre e email son obligatorios.')
+    if (!form.id || !canSaveProfile) {
+      alert('Revisa los campos marcados antes de guardar.')
       return
-    }
-
-    if (form.password || form.confirm_password) {
-      if (!form.password.trim() || !form.confirm_password.trim()) {
-        alert('Si vas a cambiar la contrasena, debes completar ambos campos.')
-        return
-      }
-
-      if (form.password !== form.confirm_password) {
-        alert('La contrasena y su confirmacion deben coincidir.')
-        return
-      }
     }
 
     setSaving(true)
@@ -270,24 +304,30 @@ const Profile = () => {
             <div className="mb-3">
               <CFormLabel>Nombre</CFormLabel>
               <CFormInput
+                invalid={Boolean(formErrors.first_name)}
                 value={form.first_name}
                 onChange={(event) => setForm({ ...form, first_name: event.target.value })}
               />
+              <CFormFeedback invalid>{formErrors.first_name}</CFormFeedback>
             </div>
             <div className="mb-3">
               <CFormLabel>Apellido</CFormLabel>
               <CFormInput
+                invalid={Boolean(formErrors.last_name)}
                 value={form.last_name}
                 onChange={(event) => setForm({ ...form, last_name: event.target.value })}
               />
+              <CFormFeedback invalid>{formErrors.last_name}</CFormFeedback>
             </div>
             <div className="mb-3">
               <CFormLabel>Email</CFormLabel>
               <CFormInput
+                invalid={Boolean(formErrors.email)}
                 type="email"
                 value={form.email}
                 onChange={(event) => setForm({ ...form, email: event.target.value })}
               />
+              <CFormFeedback invalid>{formErrors.email}</CFormFeedback>
             </div>
             <div className="mb-3">
               <CFormLabel>Telefono</CFormLabel>
@@ -298,8 +338,9 @@ const Profile = () => {
             </div>
             <div className="mb-3">
               <CFormLabel>Nueva contrasena</CFormLabel>
-              <CInputGroup>
+              <CInputGroup className="has-validation">
                 <CFormInput
+                  invalid={Boolean(formErrors.password)}
                   type={showPassword ? 'text' : 'password'}
                   value={form.password}
                   onChange={(event) => setForm({ ...form, password: event.target.value })}
@@ -313,12 +354,14 @@ const Profile = () => {
                 >
                   <CIcon icon={showPassword ? cilLowVision : cilViewColumn} />
                 </CButton>
+                <CFormFeedback invalid>{formErrors.password}</CFormFeedback>
               </CInputGroup>
             </div>
             <div className="mb-3">
               <CFormLabel>Confirmar nueva contrasena</CFormLabel>
-              <CInputGroup>
+              <CInputGroup className="has-validation">
                 <CFormInput
+                  invalid={Boolean(formErrors.confirm_password)}
                   type={showConfirmPassword ? 'text' : 'password'}
                   value={form.confirm_password}
                   onChange={(event) => setForm({ ...form, confirm_password: event.target.value })}
@@ -332,6 +375,7 @@ const Profile = () => {
                 >
                   <CIcon icon={showConfirmPassword ? cilLowVision : cilViewColumn} />
                 </CButton>
+                <CFormFeedback invalid>{formErrors.confirm_password}</CFormFeedback>
               </CInputGroup>
             </div>
           </CForm>
@@ -340,7 +384,7 @@ const Profile = () => {
           <CButton color="secondary" onClick={closeEdit}>
             Cancelar
           </CButton>
-          <CButton color="primary" disabled={saving} onClick={handleSaveEdit}>
+          <CButton color="primary" disabled={!canSaveProfile} onClick={handleSaveEdit}>
             {saving ? 'Guardando...' : 'Guardar cambios'}
           </CButton>
         </CModalFooter>
