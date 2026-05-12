@@ -38,6 +38,23 @@
       "avatar": "/assets/images/avatars/3.jpg",
       "createdAt": "2025-11-05",
       "updatedAt": "2025-11-06"
+    },
+    {
+      "id": "16",
+      "cedula": "V27227329",
+      "nombre": "Milon",
+      "apellido": "Admin",
+      "fullName": "Milon Admin",
+      "rol": "Admin",
+      "email": "milon@example.com",
+      "password": "admin123",
+      "phone": "041412349999",
+      "role_id": 1,
+      "role_name": "Admin",
+      "status": null,
+      "profile_image_url": null,
+      "createdAt": "2026-04-23T01:08:10.486Z",
+      "updatedAt": "2026-04-29T03:52:08.933Z"
     }
   ],
   "projects": [
@@ -125,6 +142,7 @@
     {
       "id": "1",
       "username": "admin",
+      "email": "maria@example.com",
       "password": "admin123",
       "userId": 1,
       "token": "demo-token-abc123"
@@ -132,9 +150,18 @@
     {
       "id": "2",
       "username": "carlos",
+      "email": "carlos@example.com",
       "password": "carlos123",
       "userId": 2,
       "token": "demo-token-carlos456"
+    },
+    {
+      "id": "16",
+      "username": "milon",
+      "email": "milon@example.com",
+      "password": "admin123",
+      "userId": 16,
+      "token": "demo-token-milon789"
     }
   ]
 }
