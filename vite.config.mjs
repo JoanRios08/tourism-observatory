@@ -4,7 +4,8 @@ import path from 'node:path'
 import autoprefixer from 'autoprefixer'
 
 export default defineConfig(() => {
-  const backendTarget = process.env.VITE_API_BASE || process.env.API_BASE || 'http://localhost:4000'
+  const backendTarget =
+    process.env.VITE_API_BASE || process.env.API_BASE || 'https://backend-observatory.onrender.com'
   const proxyOptions = {
     target: backendTarget,
     changeOrigin: true,

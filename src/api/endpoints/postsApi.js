@@ -6,6 +6,7 @@ const postsApi = {
   getPostById: (id) => axiosClient.get(`/posts/${id}`),
   createPost: (data) => axiosClient.post('/posts', data),
   updatePost: (id, data) => axiosClient.put(`/posts/${id}`, data),
+  updatePostStatus: (id, status) => axiosClient.patch(`/posts/${id}/status`, { status }),
   deletePost: (id) => axiosClient.delete(`/posts/${id}`),
 }
 
