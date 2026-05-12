@@ -1,13 +1,13 @@
 import { jwtDecode } from 'jwt-decode'
 
 const AUTH_TOKEN_KEY = 'authToken'
-const AUTH_USER_KEY = 'authUsername'
+const AUTH_EMAIL_KEY = 'authEmail'
 
 export const getToken = () => {
   return localStorage.getItem(AUTH_TOKEN_KEY)
 }
 
-export const saveAuthData = (data, username) => {
+export const saveAuthData = (data, email) => {
   if (!data) return false
   let token = null
   if (typeof data === 'string') token = data
@@ -20,7 +20,7 @@ export const saveAuthData = (data, username) => {
       (data.data && (data.data.token || data.data.access_token))
   if (!token) return false
   localStorage.setItem(AUTH_TOKEN_KEY, token)
-  if (username) localStorage.setItem(AUTH_USER_KEY, username)
+  if (email) localStorage.setItem(AUTH_EMAIL_KEY, email)
   return true
 }
 
@@ -28,7 +28,8 @@ export const isAuthenticated = () => !!getToken()
 
 export const logout = () => {
   localStorage.removeItem(AUTH_TOKEN_KEY)
-  localStorage.removeItem(AUTH_USER_KEY)
+  localStorage.removeItem(AUTH_EMAIL_KEY)
+  localStorage.removeItem('authUsername')
 }
 
 export const getUserInfoFromToken = () => {

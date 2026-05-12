@@ -20,13 +20,14 @@ import {
   cilEnvelopeClosed,
   cilLockLocked,
   cilLowVision,
-  cilUser,
   cilViewColumn,
 } from '@coreui/icons'
 
+const getLoginUser = (response) => response?.user || response?.data?.user || response?.data || null
+
 const Login = () => {
   const [flipped, setFlipped] = useState(false)
-  const [username, setUsername] = useState('')
+  const [loginEmail, setLoginEmail] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [email, setEmail] = useState('')
@@ -42,7 +43,8 @@ const Login = () => {
     setError('')
     setSuccess('')
 
-    if (!username.trim()) return setError('El usuario es obligatorio')
+    if (!loginEmail.trim()) return setError('El correo es obligatorio')
+    if (!validateEmail(loginEmail.trim())) return setError('Introduce un correo valido')
     if (!password || password.length < 4) {
       return setError('La contraseña debe tener al menos 4 caracteres')
     }
@@ -50,7 +52,7 @@ const Login = () => {
     setLoading(true)
 
     try {
-      const response = await authApi.login({ username: username.trim(), password })
+      const response = await authApi.login({ email: loginEmail.trim(), password })
       const token = getToken()
 
       if (!token) {
@@ -58,12 +60,16 @@ const Login = () => {
         return
       }
 
-      const userData = response?.user || response?.data?.user || response?.data || null
+      const userData = getLoginUser(response)
       const decodedUser = getUserInfoFromToken()
-      const resolvedUserId = userData?.id || decodedUser?.id || null
+      const resolvedUserId = response?.userId || userData?.id || decodedUser?.id || null
+      const resolvedRoleId = response?.roleId || userData?.role_id || decodedUser?.role_id || null
+      const resolvedRoleName =
+        response?.roleName || userData?.role_name || decodedUser?.role_name || null
 
       if (userData) {
         localStorage.setItem('user', JSON.stringify(userData))
+        localStorage.setItem('userInfo', JSON.stringify(userData))
       }
 
       localStorage.setItem('authToken', token)
@@ -72,6 +78,14 @@ const Login = () => {
         localStorage.setItem('userId', String(resolvedUserId))
       } else {
         localStorage.removeItem('userId')
+      }
+
+      if (resolvedRoleId) {
+        localStorage.setItem('roleId', String(resolvedRoleId))
+      }
+
+      if (resolvedRoleName) {
+        localStorage.setItem('roleName', resolvedRoleName)
       }
 
       setSuccess('Inicio de sesión correcto. Redirigiendo...')
@@ -187,14 +201,15 @@ const Login = () => {
 
                       <CInputGroup className="login-input-group mb-4">
                         <CInputGroupText className="login-input-icon">
-                          <CIcon icon={cilUser} />
+                          <CIcon icon={cilEnvelopeClosed} />
                         </CInputGroupText>
                         <CFormInput
                           className="login-input"
-                          value={username}
-                          onChange={(event) => setUsername(event.target.value)}
-                          placeholder="Usuario"
-                          autoComplete="username"
+                          type="email"
+                          value={loginEmail}
+                          onChange={(event) => setLoginEmail(event.target.value)}
+                          placeholder="Correo electronico"
+                          autoComplete="email"
                         />
                       </CInputGroup>
 

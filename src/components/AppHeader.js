@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { useSelector, useDispatch } from 'react-redux'
+import { useNavigate } from 'react-router-dom'
 import { CButton, CContainer, CHeader, CHeaderNav, CHeaderToggler } from '@coreui/react'
 import CIcon from '@coreui/icons-react'
 import { cilAccountLogout, cilMenu } from '@coreui/icons'
@@ -21,6 +22,7 @@ const getDisplayName = (user) => {
 const AppHeader = () => {
   const headerRef = useRef()
   const dispatch = useDispatch()
+  const navigate = useNavigate()
   const sidebarShow = useSelector((state) => state.sidebarShow)
   const [userName, setUserName] = useState('Usuario')
 
@@ -60,11 +62,12 @@ const AppHeader = () => {
 
   const handleLogout = () => {
     localStorage.removeItem('authToken')
+    localStorage.removeItem('authEmail')
+    localStorage.removeItem('authUsername')
     localStorage.removeItem('user')
     localStorage.removeItem('userInfo')
     localStorage.removeItem('userId')
-    window.location.hash = '#/login'
-    window.location.reload()
+    navigate('/login', { replace: true })
   }
 
   return (
