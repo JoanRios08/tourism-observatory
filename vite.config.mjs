@@ -48,6 +48,7 @@ export default defineConfig(() => {
       port: 3000,
       proxy: {
         '/login': proxyOptions,
+        '/auth': proxyOptions,
         '/users': proxyOptions,
         '/authors': proxyOptions,
         '/projects': proxyOptions,

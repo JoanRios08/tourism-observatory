@@ -52,7 +52,11 @@ export const normalizeUser = (user) => ({
   displayName: getUserDisplayName(user),
   first_name: user.first_name || user.nombre || user.name || '',
   last_name: user.last_name || user.apellido || '',
-  roleLabel: user.role_name || user.rol || user.role || 'Usuario',
+  roleLabel:
+    user.role_name ||
+    user.rol ||
+    user.role ||
+    ({ 1: 'Administrador', 2: 'Coordinador', 3: 'Profesor' }[Number(user.role_id)] ?? 'Usuario'),
   createdLabel: formatDate(user.created_at || user.createdAt),
   updatedLabel: formatDate(user.updated_at || user.updatedAt),
 })

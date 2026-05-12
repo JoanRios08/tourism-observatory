@@ -34,7 +34,6 @@ import { cilLowVision, cilViewColumn } from '@coreui/icons'
 const initialCreateForm = {
   first_name: '',
   last_name: '',
-  dni_type: 'V',
   dni: '',
   email: '',
   password: '',
@@ -55,11 +54,6 @@ const initialEditForm = {
 
 const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const alphanumericRegex = /^[a-zA-Z0-9]+$/
-
-const getCreateDniValue = (form) => {
-  const dni = form.dni.trim()
-  return dni ? `${form.dni_type}-${dni}` : ''
-}
 
 const roleColor = (roleLabel) => {
   const role = String(roleLabel || '').toLowerCase()
@@ -197,7 +191,7 @@ const Users = () => {
       await userApi.createUser({
         first_name: createForm.first_name.trim(),
         last_name: createForm.last_name.trim(),
-        dni: getCreateDniValue(createForm),
+        dni: createForm.dni.trim(),
         email: createForm.email.trim(),
         password: createForm.password,
         role_id: Number(createForm.role_id),
@@ -373,24 +367,13 @@ const Users = () => {
             <CFormFeedback invalid>{createErrors.last_name}</CFormFeedback>
           </div>
           <div className="mb-3">
-            <CFormLabel>Cédula</CFormLabel>
-            <CInputGroup className="has-validation">
-              <CFormSelect
-                value={createForm.dni_type}
-                onChange={(event) => setCreateForm({ ...createForm, dni_type: event.target.value })}
-                style={{ maxWidth: 88 }}
-              >
-                <option value="V">V</option>
-                <option value="E">E</option>
-                <option value="J">J</option>
-              </CFormSelect>
-              <CFormInput
-                invalid={Boolean(createErrors.dni)}
-                value={createForm.dni}
-                onChange={(event) => setCreateForm({ ...createForm, dni: event.target.value })}
-              />
-              <CFormFeedback invalid>{createErrors.dni}</CFormFeedback>
-            </CInputGroup>
+            <CFormLabel>Docuemnto de Identidad</CFormLabel>
+            <CFormInput
+              invalid={Boolean(createErrors.dni)}
+              value={createForm.dni}
+              onChange={(event) => setCreateForm({ ...createForm, dni: event.target.value })}
+            />
+            <CFormFeedback invalid>{createErrors.dni}</CFormFeedback>
           </div>
           <div className="mb-3">
             <CFormLabel>Email</CFormLabel>
