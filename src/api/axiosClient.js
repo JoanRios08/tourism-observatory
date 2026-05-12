@@ -4,7 +4,7 @@ const envBase = import.meta?.env?.VITE_API_BASE ?? window.__API_BASE__ ?? ''
 const isLocalhost =
   typeof window !== 'undefined' &&
   (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
-const baseURL = isLocalhost ? '' : envBase
+const baseURL = envBase || (isLocalhost ? '' : '/api')
 
 const axiosClient = axios.create({
   baseURL,
@@ -34,23 +34,6 @@ axiosClient.interceptors.request.use(
 axiosClient.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response?.status === 401) {
-      try {
-        localStorage.removeItem('authToken')
-      } catch (e) {
-        // ignore
-      }
-      try {
-        window.location.hash = '#/login'
-        window.location.reload()
-      } catch (e) {
-        try {
-          window.location.href = '/login'
-        } catch (e2) {
-          // ignore
-        }
-      }
-    }
     return Promise.reject(error)
   },
 )

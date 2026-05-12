@@ -32,12 +32,16 @@ const normalizeUserRecord = (user) => ({
 
 app.post('/login', (req, res) => {
   const db = readDb()
-  const username = req.body.username || req.body.email
+  const email = req.body.email
   const password = req.body.password
   const authRecord = db.auth.find(
-    (item) =>
-      (item.username === username || item.email === username) &&
-      String(item.password) === String(password),
+    (item) => {
+      const user = db.users.find((userItem) => String(userItem.id) === String(item.userId))
+      return (
+        (item.email === email || user?.email === email) &&
+        String(item.password) === String(password)
+      )
+    },
   )
 
   if (!authRecord) {
@@ -47,17 +51,21 @@ app.post('/login', (req, res) => {
   const user = db.users.find((item) => String(item.id) === String(authRecord.userId))
   return res.json({
     token: authRecord.token,
-    user: user ? normalizeUserRecord(user) : { id: authRecord.userId, username },
+    user: user ? normalizeUserRecord(user) : { id: authRecord.userId, email },
   })
 })
 
 app.get('/auth', (req, res) => {
   const db = readDb()
-  const { username, password } = req.query
+  const { email, password } = req.query
   const auth = db.auth.filter(
-    (item) =>
-      (!username || item.username === username || item.email === username) &&
-      (!password || String(item.password) === String(password)),
+    (item) => {
+      const user = db.users.find((userItem) => String(userItem.id) === String(item.userId))
+      return (
+        (!email || item.email === email || user?.email === email) &&
+        (!password || String(item.password) === String(password))
+      )
+    },
   )
   res.json(auth)
 })
