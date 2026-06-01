@@ -55,6 +55,7 @@ export default defineConfig(() => {
         '/projects': proxyOptions,
         '/documents': proxyOptions,
         '/posts': proxyOptions,
+        '/academic-options': proxyOptions,
         '/dashboard': proxyOptions,
       },
     },
