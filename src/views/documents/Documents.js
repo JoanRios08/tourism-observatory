@@ -27,9 +27,16 @@ import {
 } from '@coreui/react'
 import CIcon from '@coreui/icons-react'
 import { cilPencil, cilTrash } from '@coreui/icons'
+import academicApi from '../../api/endpoints/academicApi'
 import authorsApi from '../../api/endpoints/authorsApi'
 import documentsApi from '../../api/endpoints/documentsApi'
 import projectsApi from '../../api/endpoints/projectsApi'
+import {
+  getAcademicPayload,
+  getAcademicSearchText,
+  initialAcademicFields,
+  normalizeAcademicOptions,
+} from '../../utils/academicOptions'
 import {
   extractCollection,
   getUserDisplayName,
@@ -45,18 +52,26 @@ const initialForm = {
   author_id: '',
   project_id: '',
   published_at: '',
+  ...initialAcademicFields,
 }
 
 const Documents = () => {
   const [documents, setDocuments] = useState([])
   const [projects, setProjects] = useState([])
   const [authors, setAuthors] = useState([])
+  const [academicOptions, setAcademicOptions] = useState({
+    campuses: [],
+    careers: [],
+    campusCareers: [],
+  })
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [search, setSearch] = useState('')
   const [typeFilter, setTypeFilter] = useState('')
   const [authorFilter, setAuthorFilter] = useState('')
+  const [campusFilter, setCampusFilter] = useState('')
+  const [careerFilter, setCareerFilter] = useState('')
   const [modalVisible, setModalVisible] = useState(false)
   const [editingId, setEditingId] = useState(null)
   const [form, setForm] = useState(initialForm)
@@ -66,11 +81,13 @@ const Documents = () => {
     setError('')
 
     try {
-      const [documentsResponse, projectsResponse, authorsResponse] = await Promise.all([
-        documentsApi.getDocuments(true),
-        projectsApi.getProjects(),
-        authorsApi.getAuthors(),
-      ])
+      const [documentsResponse, projectsResponse, authorsResponse, academicResponse] =
+        await Promise.all([
+          documentsApi.getDocuments(true),
+          projectsApi.getProjects(),
+          authorsApi.getAuthors(),
+          academicApi.getOptions().catch(() => ({ data: {} })),
+        ])
 
       const authorItems = extractCollection(authorsResponse.data, ['authors'])
       const projectItems = extractCollection(projectsResponse.data, ['projects']).map(
@@ -86,6 +103,7 @@ const Documents = () => {
       setAuthors(authorItems)
       setProjects(projectItems)
       setDocuments(documentItems)
+      setAcademicOptions(normalizeAcademicOptions(academicResponse.data))
     } catch (fetchError) {
       console.error('Error loading documents', fetchError)
       setAuthors([])
@@ -108,12 +126,15 @@ const Documents = () => {
         !q ||
         document.title.toLowerCase().includes(q) ||
         document.authorName.toLowerCase().includes(q) ||
-        document.projectName.toLowerCase().includes(q)
+        document.projectName.toLowerCase().includes(q) ||
+        getAcademicSearchText(document).toLowerCase().includes(q)
       const matchesType = !typeFilter || document.type === typeFilter
       const matchesAuthor = !authorFilter || String(document.author_id) === authorFilter
-      return matchesSearch && matchesType && matchesAuthor
+      const matchesCampus = !campusFilter || String(document.campus_id) === campusFilter
+      const matchesCareer = !careerFilter || String(document.career_id) === careerFilter
+      return matchesSearch && matchesType && matchesAuthor && matchesCampus && matchesCareer
     })
-  }, [authorFilter, documents, search, typeFilter])
+  }, [authorFilter, campusFilter, careerFilter, documents, search, typeFilter])
 
   const typeOptions = [...new Set(documents.map((document) => document.type).filter(Boolean))]
   const latestDocument = documents[0]
@@ -136,6 +157,9 @@ const Documents = () => {
       published_at: document.published_at
         ? new Date(document.published_at).toISOString().slice(0, 10)
         : '',
+      campus_id: document.campus_id ? String(document.campus_id) : '',
+      career_id: document.career_id ? String(document.career_id) : '',
+      campus_career_id: document.campus_career_id ? String(document.campus_career_id) : '',
     })
     setModalVisible(true)
   }
@@ -164,6 +188,7 @@ const Documents = () => {
       author_id: Number(form.author_id),
       project_id: form.project_id ? Number(form.project_id) : undefined,
       published_at: form.published_at || undefined,
+      ...getAcademicPayload(form, academicOptions.campusCareers),
       ...(form.file_url.trim() ? { file_url: form.file_url.trim() } : {}),
     }
 
@@ -231,17 +256,17 @@ const Documents = () => {
       <CCard className="mb-4">
         <CCardHeader>
           <CRow className="align-items-end g-3">
-            <CCol md={4}>
+            <CCol md={3}>
               <CFormLabel>Buscar</CFormLabel>
               <CInputGroup>
                 <CFormInput
-                  placeholder="Título, autor o proyecto"
+                  placeholder="Título, autor, núcleo o carrera"
                   value={search}
                   onChange={(event) => setSearch(event.target.value)}
                 />
               </CInputGroup>
             </CCol>
-            <CCol md={3}>
+            <CCol md={2}>
               <CFormLabel>Tipo</CFormLabel>
               <CFormSelect
                 value={typeFilter}
@@ -269,7 +294,35 @@ const Documents = () => {
                 ))}
               </CFormSelect>
             </CCol>
-            <CCol md={2} className="d-flex justify-content-end">
+            <CCol md={2}>
+              <CFormLabel>Núcleo / Extensión</CFormLabel>
+              <CFormSelect
+                value={campusFilter}
+                onChange={(event) => setCampusFilter(event.target.value)}
+              >
+                <option value="">Todos</option>
+                {academicOptions.campuses.map((campus) => (
+                  <option key={campus.id} value={campus.id}>
+                    {campus.name}
+                  </option>
+                ))}
+              </CFormSelect>
+            </CCol>
+            <CCol md={2}>
+              <CFormLabel>Carrera</CFormLabel>
+              <CFormSelect
+                value={careerFilter}
+                onChange={(event) => setCareerFilter(event.target.value)}
+              >
+                <option value="">Todas</option>
+                {academicOptions.careers.map((career) => (
+                  <option key={career.id} value={career.id}>
+                    {career.name}
+                  </option>
+                ))}
+              </CFormSelect>
+            </CCol>
+            <CCol md={12} className="d-flex justify-content-end">
               <CButton color="primary" onClick={openCreate}>
                 Crear documento
               </CButton>
@@ -290,6 +343,8 @@ const Documents = () => {
                   <CTableHeaderCell>Tipo</CTableHeaderCell>
                   <CTableHeaderCell>Autor</CTableHeaderCell>
                   <CTableHeaderCell>Proyecto</CTableHeaderCell>
+                  <CTableHeaderCell>Núcleo / Extensión</CTableHeaderCell>
+                  <CTableHeaderCell>Carrera</CTableHeaderCell>
                   <CTableHeaderCell>Publicado</CTableHeaderCell>
                   <CTableHeaderCell style={{ width: 120 }}>Acciones</CTableHeaderCell>
                 </CTableRow>
@@ -302,6 +357,8 @@ const Documents = () => {
                     <CTableDataCell>{document.type}</CTableDataCell>
                     <CTableDataCell>{document.authorName || 'Sin autor'}</CTableDataCell>
                     <CTableDataCell>{document.projectName}</CTableDataCell>
+                    <CTableDataCell>{document.campusName || 'Sin asignar'}</CTableDataCell>
+                    <CTableDataCell>{document.careerName || 'Sin asignar'}</CTableDataCell>
                     <CTableDataCell>
                       {document.publishedLabel || document.createdLabel}
                     </CTableDataCell>
@@ -390,6 +447,34 @@ const Documents = () => {
               {projects.map((project) => (
                 <option key={project.id} value={project.id}>
                   {project.name}
+                </option>
+              ))}
+            </CFormSelect>
+          </div>
+          <div className="mb-3">
+            <CFormLabel>Núcleo / Extensión</CFormLabel>
+            <CFormSelect
+              value={form.campus_id}
+              onChange={(event) => setForm({ ...form, campus_id: event.target.value })}
+            >
+              <option value="">Seleccione núcleo o extensión</option>
+              {academicOptions.campuses.map((campus) => (
+                <option key={campus.id} value={campus.id}>
+                  {campus.name}
+                </option>
+              ))}
+            </CFormSelect>
+          </div>
+          <div className="mb-3">
+            <CFormLabel>Carrera</CFormLabel>
+            <CFormSelect
+              value={form.career_id}
+              onChange={(event) => setForm({ ...form, career_id: event.target.value })}
+            >
+              <option value="">Seleccione una carrera</option>
+              {academicOptions.careers.map((career) => (
+                <option key={career.id} value={career.id}>
+                  {career.name}
                 </option>
               ))}
             </CFormSelect>
