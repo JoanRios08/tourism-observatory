@@ -28,8 +28,15 @@ import {
 } from '@coreui/react'
 import CIcon from '@coreui/icons-react'
 import { cilPencil, cilTrash } from '@coreui/icons'
+import academicApi from '../../api/endpoints/academicApi'
 import authorsApi from '../../api/endpoints/authorsApi'
 import projectsApi from '../../api/endpoints/projectsApi'
+import {
+  getAcademicPayload,
+  getAcademicSearchText,
+  initialAcademicFields,
+  normalizeAcademicOptions,
+} from '../../utils/academicOptions'
 import { extractCollection, formatDate, normalizeProject } from '../../utils/observatoryAdapters'
 
 const initialForm = {
@@ -39,6 +46,7 @@ const initialForm = {
   start_date: '',
   end_date: '',
   author_id: '',
+  ...initialAcademicFields,
 }
 
 const statusColor = {
@@ -50,12 +58,19 @@ const statusColor = {
 const Projects = () => {
   const [projects, setProjects] = useState([])
   const [authors, setAuthors] = useState([])
+  const [academicOptions, setAcademicOptions] = useState({
+    campuses: [],
+    careers: [],
+    campusCareers: [],
+  })
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('')
   const [authorFilter, setAuthorFilter] = useState('')
+  const [campusFilter, setCampusFilter] = useState('')
+  const [careerFilter, setCareerFilter] = useState('')
   const [modalVisible, setModalVisible] = useState(false)
   const [editingId, setEditingId] = useState(null)
   const [form, setForm] = useState(initialForm)
@@ -65,9 +80,10 @@ const Projects = () => {
     setError('')
 
     try {
-      const [projectsResponse, authorsResponse] = await Promise.all([
+      const [projectsResponse, authorsResponse, academicResponse] = await Promise.all([
         projectsApi.getProjects(),
         authorsApi.getAuthors(),
+        academicApi.getOptions().catch(() => ({ data: {} })),
       ])
 
       const authorItems = extractCollection(authorsResponse.data, ['authors'])
@@ -82,6 +98,7 @@ const Projects = () => {
 
       setAuthors(authorItems)
       setProjects(projectItems)
+      setAcademicOptions(normalizeAcademicOptions(academicResponse.data))
     } catch (fetchError) {
       console.error('Error loading projects', fetchError)
       setProjects([])
@@ -100,12 +117,17 @@ const Projects = () => {
     return projects.filter((project) => {
       const q = search.trim().toLowerCase()
       const matchesSearch =
-        !q || project.name.toLowerCase().includes(q) || project.authorName.toLowerCase().includes(q)
+        !q ||
+        project.name.toLowerCase().includes(q) ||
+        project.authorName.toLowerCase().includes(q) ||
+        getAcademicSearchText(project).toLowerCase().includes(q)
       const matchesStatus = !statusFilter || project.status === statusFilter
       const matchesAuthor = !authorFilter || String(project.author_id) === authorFilter
-      return matchesSearch && matchesStatus && matchesAuthor
+      const matchesCampus = !campusFilter || String(project.campus_id) === campusFilter
+      const matchesCareer = !careerFilter || String(project.career_id) === careerFilter
+      return matchesSearch && matchesStatus && matchesAuthor && matchesCampus && matchesCareer
     })
-  }, [authorFilter, projects, search, statusFilter])
+  }, [authorFilter, campusFilter, careerFilter, projects, search, statusFilter])
 
   const latestProject = projects[0]
 
@@ -124,6 +146,9 @@ const Projects = () => {
       start_date: project.startDate || '',
       end_date: project.endDate || '',
       author_id: project.author_id ? String(project.author_id) : '',
+      campus_id: project.campus_id ? String(project.campus_id) : '',
+      career_id: project.career_id ? String(project.career_id) : '',
+      campus_career_id: project.campus_career_id ? String(project.campus_career_id) : '',
     })
     setModalVisible(true)
   }
@@ -147,6 +172,7 @@ const Projects = () => {
       start_date: form.start_date || undefined,
       end_date: form.end_date || undefined,
       author_id: Number(form.author_id),
+      ...getAcademicPayload(form, academicOptions.campusCareers),
     }
 
     setSaving(true)
@@ -213,17 +239,17 @@ const Projects = () => {
       <CCard className="mb-4">
         <CCardHeader>
           <CRow className="align-items-end g-3">
-            <CCol md={4}>
+            <CCol md={3}>
               <CFormLabel>Buscar</CFormLabel>
               <CInputGroup>
                 <CFormInput
-                  placeholder="Nombre o autor"
+                  placeholder="Nombre, autor, núcleo o carrera"
                   value={search}
                   onChange={(event) => setSearch(event.target.value)}
                 />
               </CInputGroup>
             </CCol>
-            <CCol md={3}>
+            <CCol md={2}>
               <CFormLabel>Estado</CFormLabel>
               <CFormSelect
                 value={statusFilter}
@@ -249,7 +275,35 @@ const Projects = () => {
                 ))}
               </CFormSelect>
             </CCol>
-            <CCol md={2} className="d-flex justify-content-end">
+            <CCol md={2}>
+              <CFormLabel>Núcleo / Extensión</CFormLabel>
+              <CFormSelect
+                value={campusFilter}
+                onChange={(event) => setCampusFilter(event.target.value)}
+              >
+                <option value="">Todos</option>
+                {academicOptions.campuses.map((campus) => (
+                  <option key={campus.id} value={campus.id}>
+                    {campus.name}
+                  </option>
+                ))}
+              </CFormSelect>
+            </CCol>
+            <CCol md={2}>
+              <CFormLabel>Carrera</CFormLabel>
+              <CFormSelect
+                value={careerFilter}
+                onChange={(event) => setCareerFilter(event.target.value)}
+              >
+                <option value="">Todas</option>
+                {academicOptions.careers.map((career) => (
+                  <option key={career.id} value={career.id}>
+                    {career.name}
+                  </option>
+                ))}
+              </CFormSelect>
+            </CCol>
+            <CCol md={12} className="d-flex justify-content-end">
               <CButton color="primary" onClick={openCreate}>
                 Crear proyecto
               </CButton>
@@ -268,6 +322,8 @@ const Projects = () => {
                   <CTableHeaderCell>ID</CTableHeaderCell>
                   <CTableHeaderCell>Nombre</CTableHeaderCell>
                   <CTableHeaderCell>Autor</CTableHeaderCell>
+                  <CTableHeaderCell>Núcleo / Extensión</CTableHeaderCell>
+                  <CTableHeaderCell>Carrera</CTableHeaderCell>
                   <CTableHeaderCell>Estado</CTableHeaderCell>
                   <CTableHeaderCell>Inicio</CTableHeaderCell>
                   <CTableHeaderCell>Fin</CTableHeaderCell>
@@ -281,6 +337,8 @@ const Projects = () => {
                     <CTableDataCell>{project.id}</CTableDataCell>
                     <CTableDataCell>{project.name}</CTableDataCell>
                     <CTableDataCell>{project.authorName || 'Sin autor'}</CTableDataCell>
+                    <CTableDataCell>{project.campusName || 'Sin asignar'}</CTableDataCell>
+                    <CTableDataCell>{project.careerName || 'Sin asignar'}</CTableDataCell>
                     <CTableDataCell>
                       <CBadge color={statusColor[project.status] || 'secondary'}>
                         {project.status}
@@ -358,6 +416,34 @@ const Projects = () => {
               <option value="active">Activo</option>
               <option value="completed">Completado</option>
               <option value="suspended">Suspendido</option>
+            </CFormSelect>
+          </div>
+          <div className="mb-3">
+            <CFormLabel>Núcleo / Extensión</CFormLabel>
+            <CFormSelect
+              value={form.campus_id}
+              onChange={(event) => setForm({ ...form, campus_id: event.target.value })}
+            >
+              <option value="">Seleccione núcleo o extensión</option>
+              {academicOptions.campuses.map((campus) => (
+                <option key={campus.id} value={campus.id}>
+                  {campus.name}
+                </option>
+              ))}
+            </CFormSelect>
+          </div>
+          <div className="mb-3">
+            <CFormLabel>Carrera</CFormLabel>
+            <CFormSelect
+              value={form.career_id}
+              onChange={(event) => setForm({ ...form, career_id: event.target.value })}
+            >
+              <option value="">Seleccione una carrera</option>
+              {academicOptions.careers.map((career) => (
+                <option key={career.id} value={career.id}>
+                  {career.name}
+                </option>
+              ))}
             </CFormSelect>
           </div>
           <CRow>

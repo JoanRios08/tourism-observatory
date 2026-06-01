@@ -79,6 +79,11 @@ export const normalizeProject = (project) => ({
   id: project.id,
   name: project.name || project.title || '',
   authorName: project.author_name || project.userName || '',
+  campus_id: project.campus_id ?? null,
+  career_id: project.career_id ?? null,
+  campus_career_id: project.campus_career_id ?? null,
+  campusName: project.campus_name || project.campusName || '',
+  careerName: project.career_name || project.careerName || '',
   status: project.status || 'active',
   startDate: toDateInputValue(project.start_date),
   endDate: toDateInputValue(project.end_date),
@@ -95,7 +100,32 @@ export const normalizeDocument = (document, projectsById = new Map(), usersById 
   project_id: document.project_id ?? null,
   authorName: document.author_name || getUserDisplayName(usersById.get(document.author_id)) || '',
   projectName: projectsById.get(document.project_id)?.name || 'Sin proyecto',
+  campus_id: document.campus_id ?? null,
+  career_id: document.career_id ?? null,
+  campus_career_id: document.campus_career_id ?? null,
+  campusName: document.campus_name || document.campusName || '',
+  careerName: document.career_name || document.careerName || '',
   createdLabel: formatDate(document.created_at || document.createdAt),
   updatedLabel: formatDate(document.updated_at || document.updatedAt),
   publishedLabel: formatDate(document.published_at || document.publishedAt),
+})
+
+export const normalizeCampus = (campus) => ({
+  ...campus,
+  id: campus.id ?? campus.campus_id ?? null,
+  name: campus.name || campus.label || campus.title || campus.campus_name || '',
+  type: campus.campus_type || campus.type || campus.kind || campus.category || '',
+})
+
+export const normalizeCareer = (career) => ({
+  ...career,
+  id: career.id ?? career.career_id ?? null,
+  name: career.name || career.label || career.title || career.career_name || '',
+})
+
+export const normalizeCampusCareer = (campusCareer) => ({
+  ...campusCareer,
+  id: campusCareer.id ?? campusCareer.campus_career_id ?? null,
+  campus_id: campusCareer.campus_id ?? campusCareer.campusId ?? null,
+  career_id: campusCareer.career_id ?? campusCareer.careerId ?? null,
 })

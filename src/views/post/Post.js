@@ -29,11 +29,24 @@ import {
 } from '@coreui/react'
 import CIcon from '@coreui/icons-react'
 import { cilCheck, cilPencil, cilTrash } from '@coreui/icons'
+import academicApi from '../../api/endpoints/academicApi'
 import authorsApi from '../../api/endpoints/authorsApi'
 import postsApi from '../../api/endpoints/postsApi'
 import { extractCollection, formatDate } from '../../utils/observatoryAdapters'
+import {
+  getAcademicPayload,
+  getAcademicSearchText,
+  initialAcademicFields,
+  normalizeAcademicOptions,
+} from '../../utils/academicOptions'
 
-const initialForm = { author_id: '', title: '', category_id: '', content: '' }
+const initialForm = {
+  author_id: '',
+  title: '',
+  category_id: '',
+  content: '',
+  ...initialAcademicFields,
+}
 
 const statusColor = {
   approved: 'success',
@@ -74,6 +87,11 @@ const normalizePost = (post) => ({
   category_id: post.category_id ?? post.categoryId ?? null,
   categoryName: post.category_name ?? post.categoryName ?? post.category ?? '',
   author_id: post.author_id ?? post.authorId ?? post.user_id ?? post.userId ?? null,
+  campus_id: post.campus_id ?? null,
+  career_id: post.career_id ?? null,
+  campus_career_id: post.campus_career_id ?? null,
+  campusName: post.campus_name ?? post.campusName ?? '',
+  careerName: post.career_name ?? post.careerName ?? '',
 })
 
 const getCollection = (payload, keys) => {
@@ -87,7 +105,7 @@ const toNumberOrUndefined = (value) => {
   return Number.isNaN(numberValue) ? undefined : numberValue
 }
 
-const getPostPayload = (form, status = 'pending_approval') => {
+const getPostPayload = (form, status = 'pending_approval', campusCareers = []) => {
   const authorId = toNumberOrUndefined(form.author_id)
   const categoryId = toNumberOrUndefined(form.category_id)
 
@@ -98,6 +116,7 @@ const getPostPayload = (form, status = 'pending_approval') => {
     user_id: authorId,
     author_id: authorId,
     category_id: categoryId,
+    ...getAcademicPayload(form, campusCareers),
   }
 }
 
@@ -117,12 +136,19 @@ const getApiErrorMessage = (error) => {
 const Post = () => {
   const [authors, setAuthors] = useState([])
   const [posts, setPosts] = useState([])
+  const [academicOptions, setAcademicOptions] = useState({
+    campuses: [],
+    careers: [],
+    campusCareers: [],
+  })
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [titleFilter, setTitleFilter] = useState('')
   const [authorFilter, setAuthorFilter] = useState('')
   const [categoryFilter, setCategoryFilter] = useState('')
+  const [campusFilter, setCampusFilter] = useState('')
+  const [careerFilter, setCareerFilter] = useState('')
   const [showEdit, setShowEdit] = useState(false)
   const [editingPost, setEditingPost] = useState(null)
   const [editForm, setEditForm] = useState(initialForm)
@@ -134,13 +160,15 @@ const Post = () => {
     setError('')
 
     try {
-      const [postsResponse, authorsResponse] = await Promise.all([
+      const [postsResponse, authorsResponse, academicResponse] = await Promise.all([
         postsApi.getPosts(true),
         authorsApi.getAuthors(),
+        academicApi.getOptions().catch(() => ({ data: {} })),
       ])
 
       setPosts(getCollection(postsResponse.data, ['posts']).map(normalizePost))
       setAuthors(getCollection(authorsResponse.data, ['authors']))
+      setAcademicOptions(normalizeAcademicOptions(academicResponse.data))
     } catch (loadError) {
       console.error('Error cargando publicaciones', loadError)
       setPosts([])
@@ -177,12 +205,16 @@ const Post = () => {
   const filtered = useMemo(() => {
     return posts.filter((post) => {
       const query = titleFilter.trim().toLowerCase()
-      const matchesTitle = !query || post.title.toLowerCase().includes(query)
+      const academicText = getAcademicSearchText(post).toLowerCase()
+      const matchesTitle =
+        !query || post.title.toLowerCase().includes(query) || academicText.includes(query)
       const matchesAuthor = !authorFilter || String(post.author_id || post.user_id) === authorFilter
       const matchesCategory = !categoryFilter || String(post.category_id) === categoryFilter
-      return matchesTitle && matchesAuthor && matchesCategory
+      const matchesCampus = !campusFilter || String(post.campus_id) === campusFilter
+      const matchesCareer = !careerFilter || String(post.career_id) === careerFilter
+      return matchesTitle && matchesAuthor && matchesCategory && matchesCampus && matchesCareer
     })
-  }, [posts, titleFilter, authorFilter, categoryFilter])
+  }, [authorFilter, campusFilter, careerFilter, categoryFilter, posts, titleFilter])
 
   const openCreate = () => {
     setCreateForm({
@@ -200,6 +232,9 @@ const Post = () => {
       title: post.title || '',
       category_id: post.category_id ? String(post.category_id) : '',
       content: post.content || '',
+      campus_id: post.campus_id ? String(post.campus_id) : '',
+      career_id: post.career_id ? String(post.career_id) : '',
+      campus_career_id: post.campus_career_id ? String(post.campus_career_id) : '',
     })
     setShowEdit(true)
   }
@@ -223,7 +258,9 @@ const Post = () => {
 
     setSaving(true)
     try {
-      await postsApi.createPost(getPostPayload(createForm))
+      await postsApi.createPost(
+        getPostPayload(createForm, 'pending_approval', academicOptions.campusCareers),
+      )
       closeCreate()
       await loadData()
     } catch (createError) {
@@ -249,7 +286,11 @@ const Post = () => {
     try {
       await postsApi.updatePost(
         editingPost.id,
-        getPostPayload(editForm, editingPost.status || 'pending_approval'),
+        getPostPayload(
+          editForm,
+          editingPost.status || 'pending_approval',
+          academicOptions.campusCareers,
+        ),
       )
       closeEdit()
       await loadData()
@@ -311,11 +352,11 @@ const Post = () => {
           <CCard>
             <CCardHeader>
               <CRow className="align-items-end g-3">
-                <CCol md={4}>
+                <CCol md={3}>
                   <CFormLabel>Filtrar por título</CFormLabel>
                   <CInputGroup>
                     <CFormInput
-                      placeholder="Título"
+                      placeholder="Título, núcleo o carrera"
                       value={titleFilter}
                       onChange={(event) => setTitleFilter(event.target.value)}
                     />
@@ -335,7 +376,7 @@ const Post = () => {
                     ))}
                   </CFormSelect>
                 </CCol>
-                <CCol md={3}>
+                <CCol md={2}>
                   <CFormLabel>Filtrar por categoría</CFormLabel>
                   <CFormSelect
                     value={categoryFilter}
@@ -349,7 +390,35 @@ const Post = () => {
                     ))}
                   </CFormSelect>
                 </CCol>
-                <CCol md={2} className="d-flex justify-content-end">
+                <CCol md={2}>
+                  <CFormLabel>Núcleo / Extensión</CFormLabel>
+                  <CFormSelect
+                    value={campusFilter}
+                    onChange={(event) => setCampusFilter(event.target.value)}
+                  >
+                    <option value="">Todos</option>
+                    {academicOptions.campuses.map((campus) => (
+                      <option key={campus.id} value={campus.id}>
+                        {campus.name}
+                      </option>
+                    ))}
+                  </CFormSelect>
+                </CCol>
+                <CCol md={2}>
+                  <CFormLabel>Carrera</CFormLabel>
+                  <CFormSelect
+                    value={careerFilter}
+                    onChange={(event) => setCareerFilter(event.target.value)}
+                  >
+                    <option value="">Todas</option>
+                    {academicOptions.careers.map((career) => (
+                      <option key={career.id} value={career.id}>
+                        {career.name}
+                      </option>
+                    ))}
+                  </CFormSelect>
+                </CCol>
+                <CCol md={12} className="d-flex justify-content-end">
                   <CButton color="primary" onClick={openCreate}>
                     Crear publicación
                   </CButton>
@@ -369,6 +438,8 @@ const Post = () => {
                       <CTableHeaderCell>Autor</CTableHeaderCell>
                       <CTableHeaderCell>Título</CTableHeaderCell>
                       <CTableHeaderCell>Contenido</CTableHeaderCell>
+                      <CTableHeaderCell>Núcleo / Extensión</CTableHeaderCell>
+                      <CTableHeaderCell>Carrera</CTableHeaderCell>
                       <CTableHeaderCell>Estado</CTableHeaderCell>
                       <CTableHeaderCell>Creado</CTableHeaderCell>
                       <CTableHeaderCell>Editado</CTableHeaderCell>
@@ -397,6 +468,8 @@ const Post = () => {
                         >
                           {post.content}
                         </CTableDataCell>
+                        <CTableDataCell>{post.campusName || 'Sin asignar'}</CTableDataCell>
+                        <CTableDataCell>{post.careerName || 'Sin asignar'}</CTableDataCell>
                         <CTableDataCell>
                           <CBadge color={statusColor[post.status] || 'secondary'}>
                             {post.status}
@@ -453,6 +526,7 @@ const Post = () => {
               setForm={setCreateForm}
               authors={authors}
               categories={categoryOptions}
+              academicOptions={academicOptions}
             />
           </CForm>
         </CModalBody>
@@ -477,6 +551,7 @@ const Post = () => {
               setForm={setEditForm}
               authors={authors}
               categories={categoryOptions}
+              academicOptions={academicOptions}
             />
           </CForm>
         </CModalBody>
@@ -493,7 +568,7 @@ const Post = () => {
   )
 }
 
-const PostForm = ({ form, setForm, authors, categories }) => (
+const PostForm = ({ form, setForm, authors, categories, academicOptions }) => (
   <>
     <div className="mb-3">
       <CFormLabel>Autor</CFormLabel>
@@ -537,6 +612,36 @@ const PostForm = ({ form, setForm, authors, categories }) => (
         {categories.map((category) => (
           <option key={category.id} value={category.id}>
             {category.name}
+          </option>
+        ))}
+      </CFormSelect>
+    </div>
+
+    <div className="mb-3">
+      <CFormLabel>Núcleo / Extensión</CFormLabel>
+      <CFormSelect
+        value={form.campus_id}
+        onChange={(event) => setForm({ ...form, campus_id: event.target.value })}
+      >
+        <option value="">Seleccione núcleo o extensión</option>
+        {academicOptions.campuses.map((campus) => (
+          <option key={campus.id} value={campus.id}>
+            {campus.name}
+          </option>
+        ))}
+      </CFormSelect>
+    </div>
+
+    <div className="mb-3">
+      <CFormLabel>Carrera</CFormLabel>
+      <CFormSelect
+        value={form.career_id}
+        onChange={(event) => setForm({ ...form, career_id: event.target.value })}
+      >
+        <option value="">Seleccione una carrera</option>
+        {academicOptions.careers.map((career) => (
+          <option key={career.id} value={career.id}>
+            {career.name}
           </option>
         ))}
       </CFormSelect>
