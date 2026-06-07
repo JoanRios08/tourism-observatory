@@ -10,6 +10,7 @@ const Post = React.lazy(() => import('./views/post/Post'))
 const ApprovedPosts = React.lazy(() => import('./views/post/ApprovedPosts'))
 const Projects = React.lazy(() => import('./views/projects/Projects'))
 const Documents = React.lazy(() => import('./views/documents/Documents'))
+const Nucleos = React.lazy(() => import('./views/nucleos/Nucleos'))
 
 const routes = [
   { path: '/', exact: true, name: 'Home' },
@@ -23,6 +24,7 @@ const routes = [
   { path: '/approved-posts', name: 'Publicaciones aprobadas', element: ApprovedPosts },
   { path: '/projects', name: 'Proyectos', element: Projects },
   { path: '/documents', name: 'Documentos', element: Documents },
+  { path: '/nucleos', name: 'Núcleos', element: Nucleos },
 ]
 
 export default routes

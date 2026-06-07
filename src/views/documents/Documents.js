@@ -32,10 +32,12 @@ import authorsApi from '../../api/endpoints/authorsApi'
 import documentsApi from '../../api/endpoints/documentsApi'
 import projectsApi from '../../api/endpoints/projectsApi'
 import {
+  getAvailableCareers,
   getAcademicPayload,
   getAcademicSearchText,
   initialAcademicFields,
   normalizeAcademicOptions,
+  resolveAcademicFields,
 } from '../../utils/academicOptions'
 import {
   extractCollection,
@@ -96,14 +98,19 @@ const Documents = () => {
       const projectsById = new Map(projectItems.map((project) => [project.id, project]))
       const authorsById = new Map(authorItems.map((author) => [author.id, author]))
 
+      const normalizedAcademicOptions = normalizeAcademicOptions(academicResponse.data)
       const documentItems = extractCollection(documentsResponse.data, ['documents']).map(
-        (document) => normalizeDocument(document, projectsById, authorsById),
+        (document) =>
+          resolveAcademicFields(
+            normalizeDocument(document, projectsById, authorsById),
+            normalizedAcademicOptions,
+          ),
       )
 
       setAuthors(authorItems)
       setProjects(projectItems)
       setDocuments(documentItems)
-      setAcademicOptions(normalizeAcademicOptions(academicResponse.data))
+      setAcademicOptions(normalizedAcademicOptions)
     } catch (fetchError) {
       console.error('Error loading documents', fetchError)
       setAuthors([])
@@ -168,6 +175,22 @@ const Documents = () => {
     setModalVisible(false)
     setEditingId(null)
     setForm(initialForm)
+  }
+
+  const careerOptions = getAvailableCareers(form.campus_id, academicOptions)
+
+  const updateCampus = (campusId) => {
+    const availableCareers = getAvailableCareers(campusId, academicOptions)
+    const careerStillAvailable = availableCareers.some(
+      (career) => String(career.id) === String(form.career_id),
+    )
+
+    setForm({
+      ...form,
+      campus_id: campusId,
+      career_id: careerStillAvailable ? form.career_id : '',
+      campus_career_id: '',
+    })
   }
 
   const saveDocument = async () => {
@@ -455,7 +478,7 @@ const Documents = () => {
             <CFormLabel>Núcleo / Extensión</CFormLabel>
             <CFormSelect
               value={form.campus_id}
-              onChange={(event) => setForm({ ...form, campus_id: event.target.value })}
+              onChange={(event) => updateCampus(event.target.value)}
             >
               <option value="">Seleccione núcleo o extensión</option>
               {academicOptions.campuses.map((campus) => (
@@ -469,10 +492,12 @@ const Documents = () => {
             <CFormLabel>Carrera</CFormLabel>
             <CFormSelect
               value={form.career_id}
-              onChange={(event) => setForm({ ...form, career_id: event.target.value })}
+              onChange={(event) =>
+                setForm({ ...form, career_id: event.target.value, campus_career_id: '' })
+              }
             >
               <option value="">Seleccione una carrera</option>
-              {academicOptions.careers.map((career) => (
+              {careerOptions.map((career) => (
                 <option key={career.id} value={career.id}>
                   {career.name}
                 </option>

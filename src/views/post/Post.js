@@ -34,10 +34,12 @@ import authorsApi from '../../api/endpoints/authorsApi'
 import postsApi from '../../api/endpoints/postsApi'
 import { extractCollection, formatDate } from '../../utils/observatoryAdapters'
 import {
+  getAvailableCareers,
   getAcademicPayload,
   getAcademicSearchText,
   initialAcademicFields,
   normalizeAcademicOptions,
+  resolveAcademicFields,
 } from '../../utils/academicOptions'
 
 const initialForm = {
@@ -166,9 +168,15 @@ const Post = () => {
         academicApi.getOptions().catch(() => ({ data: {} })),
       ])
 
-      setPosts(getCollection(postsResponse.data, ['posts']).map(normalizePost))
+      const normalizedAcademicOptions = normalizeAcademicOptions(academicResponse.data)
+
+      setPosts(
+        getCollection(postsResponse.data, ['posts']).map((post) =>
+          resolveAcademicFields(normalizePost(post), normalizedAcademicOptions),
+        ),
+      )
       setAuthors(getCollection(authorsResponse.data, ['authors']))
-      setAcademicOptions(normalizeAcademicOptions(academicResponse.data))
+      setAcademicOptions(normalizedAcademicOptions)
     } catch (loadError) {
       console.error('Error cargando publicaciones', loadError)
       setPosts([])
@@ -568,85 +576,102 @@ const Post = () => {
   )
 }
 
-const PostForm = ({ form, setForm, authors, categories, academicOptions }) => (
-  <>
-    <div className="mb-3">
-      <CFormLabel>Autor</CFormLabel>
-      <CFormSelect
-        value={form.author_id}
-        onChange={(event) => setForm({ ...form, author_id: event.target.value })}
-      >
-        <option value="">Seleccione un autor</option>
-        {authors.map((author) => (
-          <option key={author.id} value={author.id}>
-            {author.name || author.email}
-          </option>
-        ))}
-      </CFormSelect>
-    </div>
+const PostForm = ({ form, setForm, authors, categories, academicOptions }) => {
+  const careerOptions = getAvailableCareers(form.campus_id, academicOptions)
 
-    <div className="mb-3">
-      <CFormLabel>Título</CFormLabel>
-      <CFormInput
-        value={form.title}
-        onChange={(event) => setForm({ ...form, title: event.target.value })}
-      />
-    </div>
+  const updateCampus = (campusId) => {
+    const availableCareers = getAvailableCareers(campusId, academicOptions)
+    const careerStillAvailable = availableCareers.some(
+      (career) => String(career.id) === String(form.career_id),
+    )
 
-    <div className="mb-3">
-      <CFormLabel>Contenido</CFormLabel>
-      <CFormTextarea
-        rows={4}
-        value={form.content}
-        onChange={(event) => setForm({ ...form, content: event.target.value })}
-      />
-    </div>
+    setForm({
+      ...form,
+      campus_id: campusId,
+      career_id: careerStillAvailable ? form.career_id : '',
+      campus_career_id: '',
+    })
+  }
 
-    <div className="mb-3">
-      <CFormLabel>Categoría</CFormLabel>
-      <CFormSelect
-        value={form.category_id}
-        onChange={(event) => setForm({ ...form, category_id: event.target.value })}
-      >
-        <option value="">Seleccione una categoría</option>
-        {categories.map((category) => (
-          <option key={category.id} value={category.id}>
-            {category.name}
-          </option>
-        ))}
-      </CFormSelect>
-    </div>
+  return (
+    <>
+      <div className="mb-3">
+        <CFormLabel>Autor</CFormLabel>
+        <CFormSelect
+          value={form.author_id}
+          onChange={(event) => setForm({ ...form, author_id: event.target.value })}
+        >
+          <option value="">Seleccione un autor</option>
+          {authors.map((author) => (
+            <option key={author.id} value={author.id}>
+              {author.name || author.email}
+            </option>
+          ))}
+        </CFormSelect>
+      </div>
 
-    <div className="mb-3">
-      <CFormLabel>Núcleo / Extensión</CFormLabel>
-      <CFormSelect
-        value={form.campus_id}
-        onChange={(event) => setForm({ ...form, campus_id: event.target.value })}
-      >
-        <option value="">Seleccione núcleo o extensión</option>
-        {academicOptions.campuses.map((campus) => (
-          <option key={campus.id} value={campus.id}>
-            {campus.name}
-          </option>
-        ))}
-      </CFormSelect>
-    </div>
+      <div className="mb-3">
+        <CFormLabel>Título</CFormLabel>
+        <CFormInput
+          value={form.title}
+          onChange={(event) => setForm({ ...form, title: event.target.value })}
+        />
+      </div>
 
-    <div className="mb-3">
-      <CFormLabel>Carrera</CFormLabel>
-      <CFormSelect
-        value={form.career_id}
-        onChange={(event) => setForm({ ...form, career_id: event.target.value })}
-      >
-        <option value="">Seleccione una carrera</option>
-        {academicOptions.careers.map((career) => (
-          <option key={career.id} value={career.id}>
-            {career.name}
-          </option>
-        ))}
-      </CFormSelect>
-    </div>
-  </>
-)
+      <div className="mb-3">
+        <CFormLabel>Contenido</CFormLabel>
+        <CFormTextarea
+          rows={4}
+          value={form.content}
+          onChange={(event) => setForm({ ...form, content: event.target.value })}
+        />
+      </div>
+
+      <div className="mb-3">
+        <CFormLabel>Categoría</CFormLabel>
+        <CFormSelect
+          value={form.category_id}
+          onChange={(event) => setForm({ ...form, category_id: event.target.value })}
+        >
+          <option value="">Seleccione una categoría</option>
+          {categories.map((category) => (
+            <option key={category.id} value={category.id}>
+              {category.name}
+            </option>
+          ))}
+        </CFormSelect>
+      </div>
+
+      <div className="mb-3">
+        <CFormLabel>Núcleo / Extensión</CFormLabel>
+        <CFormSelect value={form.campus_id} onChange={(event) => updateCampus(event.target.value)}>
+          <option value="">Seleccione núcleo o extensión</option>
+          {academicOptions.campuses.map((campus) => (
+            <option key={campus.id} value={campus.id}>
+              {campus.name}
+            </option>
+          ))}
+        </CFormSelect>
+      </div>
+
+      <div className="mb-3">
+        <CFormLabel>Carrera</CFormLabel>
+        <CFormSelect
+          value={form.career_id}
+          onChange={(event) =>
+            setForm({ ...form, career_id: event.target.value, campus_career_id: '' })
+          }
+        >
+          <option value="">Seleccione una carrera</option>
+          {careerOptions.map((career) => (
+            <option key={career.id} value={career.id}>
+              {career.name}
+            </option>
+          ))}
+        </CFormSelect>
+      </div>
+    </>
+  )
+}
 
 export default Post

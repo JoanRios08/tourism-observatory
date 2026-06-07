@@ -32,10 +32,12 @@ import academicApi from '../../api/endpoints/academicApi'
 import authorsApi from '../../api/endpoints/authorsApi'
 import projectsApi from '../../api/endpoints/projectsApi'
 import {
+  getAvailableCareers,
   getAcademicPayload,
   getAcademicSearchText,
   initialAcademicFields,
   normalizeAcademicOptions,
+  resolveAcademicFields,
 } from '../../utils/academicOptions'
 import { extractCollection, formatDate, normalizeProject } from '../../utils/observatoryAdapters'
 
@@ -89,16 +91,20 @@ const Projects = () => {
       const authorItems = extractCollection(authorsResponse.data, ['authors'])
       const authorNameById = new Map(authorItems.map((author) => [author.id, author.name || '']))
 
+      const normalizedAcademicOptions = normalizeAcademicOptions(academicResponse.data)
       const projectItems = extractCollection(projectsResponse.data, ['projects']).map((project) =>
-        normalizeProject({
-          ...project,
-          author_name: project.author_name || authorNameById.get(project.author_id) || '',
-        }),
+        resolveAcademicFields(
+          normalizeProject({
+            ...project,
+            author_name: project.author_name || authorNameById.get(project.author_id) || '',
+          }),
+          normalizedAcademicOptions,
+        ),
       )
 
       setAuthors(authorItems)
       setProjects(projectItems)
-      setAcademicOptions(normalizeAcademicOptions(academicResponse.data))
+      setAcademicOptions(normalizedAcademicOptions)
     } catch (fetchError) {
       console.error('Error loading projects', fetchError)
       setProjects([])
@@ -157,6 +163,22 @@ const Projects = () => {
     setModalVisible(false)
     setEditingId(null)
     setForm(initialForm)
+  }
+
+  const careerOptions = getAvailableCareers(form.campus_id, academicOptions)
+
+  const updateCampus = (campusId) => {
+    const availableCareers = getAvailableCareers(campusId, academicOptions)
+    const careerStillAvailable = availableCareers.some(
+      (career) => String(career.id) === String(form.career_id),
+    )
+
+    setForm({
+      ...form,
+      campus_id: campusId,
+      career_id: careerStillAvailable ? form.career_id : '',
+      campus_career_id: '',
+    })
   }
 
   const saveProject = async () => {
@@ -422,7 +444,7 @@ const Projects = () => {
             <CFormLabel>Núcleo / Extensión</CFormLabel>
             <CFormSelect
               value={form.campus_id}
-              onChange={(event) => setForm({ ...form, campus_id: event.target.value })}
+              onChange={(event) => updateCampus(event.target.value)}
             >
               <option value="">Seleccione núcleo o extensión</option>
               {academicOptions.campuses.map((campus) => (
@@ -436,10 +458,12 @@ const Projects = () => {
             <CFormLabel>Carrera</CFormLabel>
             <CFormSelect
               value={form.career_id}
-              onChange={(event) => setForm({ ...form, career_id: event.target.value })}
+              onChange={(event) =>
+                setForm({ ...form, career_id: event.target.value, campus_career_id: '' })
+              }
             >
               <option value="">Seleccione una carrera</option>
-              {academicOptions.careers.map((career) => (
+              {careerOptions.map((career) => (
                 <option key={career.id} value={career.id}>
                   {career.name}
                 </option>
