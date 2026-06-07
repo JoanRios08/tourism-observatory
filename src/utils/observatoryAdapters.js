@@ -114,6 +114,7 @@ export const normalizeCampus = (campus) => ({
   ...campus,
   id: campus.id ?? campus.campus_id ?? null,
   name: campus.name || campus.label || campus.title || campus.campus_name || '',
+  state: campus.state || '',
   type: campus.campus_type || campus.type || campus.kind || campus.category || '',
 })
 
@@ -121,6 +122,7 @@ export const normalizeCareer = (career) => ({
   ...career,
   id: career.id ?? career.career_id ?? null,
   name: career.name || career.label || career.title || career.career_name || '',
+  acronym: career.acronym || career.code || '',
 })
 
 export const normalizeCampusCareer = (campusCareer) => ({

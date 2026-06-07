@@ -49,6 +49,12 @@ const _nav = [
   },
   {
     component: CNavItem,
+    name: 'Núcleos',
+    to: '/nucleos',
+    icon: <CIcon icon={cilMap} customClassName="nav-icon" />,
+  },
+  {
+    component: CNavItem,
     name: 'Autores',
     to: '/authors',
     icon: <CIcon icon={cilMap} customClassName="nav-icon" />,
