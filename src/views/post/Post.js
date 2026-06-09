@@ -59,14 +59,14 @@ const statusColor = {
 }
 
 const fallbackCategories = [
-  { id: 1, name: 'Categoría 1' },
-  { id: 2, name: 'Categoría 2' },
-  { id: 3, name: 'Categoría 3' },
-  { id: 4, name: 'Categoría 4' },
-  { id: 5, name: 'Categoría 5' },
-  { id: 6, name: 'Categoría 6' },
-  { id: 7, name: 'Categoría 7' },
-  { id: 8, name: 'Categoría 8' },
+  { id: 1, name: 'Tesis' },
+  { id: 2, name: 'Servicio Comunitario' },
+  { id: 3, name: 'Pasantía' },
+  { id: 4, name: 'Posgrado' },
+  { id: 5, name: 'Extracurricular' },
+  { id: 6, name: 'Proyecto de Asignatura' },
+  { id: 7, name: 'Maestria' },
+  { id: 8, name: 'Doctorado' },
 ]
 
 const normalizePostStatus = (post) => {
@@ -201,14 +201,32 @@ const Post = () => {
 
     posts.forEach((post) => {
       if (!post.category_id) return
-      categoriesById.set(Number(post.category_id), {
-        id: Number(post.category_id),
-        name: post.categoryName || `Categoría ${post.category_id}`,
-      })
+      const categoryId = Number(post.category_id)
+      const currentCategory = categoriesById.get(categoryId)
+
+      if (post.categoryName) {
+        categoriesById.set(categoryId, {
+          id: categoryId,
+          name: post.categoryName,
+        })
+        return
+      }
+
+      if (!currentCategory) {
+        categoriesById.set(categoryId, {
+          id: categoryId,
+          name: `Categoría ${post.category_id}`,
+        })
+      }
     })
 
     return [...categoriesById.values()].sort((a, b) => a.id - b.id)
   }, [posts])
+
+  const categoryNameById = useMemo(
+    () => new Map(categoryOptions.map((category) => [String(category.id), category.name])),
+    [categoryOptions],
+  )
 
   const filtered = useMemo(() => {
     return posts.filter((post) => {
@@ -445,6 +463,7 @@ const Post = () => {
                       <CTableHeaderCell>ID</CTableHeaderCell>
                       <CTableHeaderCell>Autor</CTableHeaderCell>
                       <CTableHeaderCell>Título</CTableHeaderCell>
+                      <CTableHeaderCell>Categoría</CTableHeaderCell>
                       <CTableHeaderCell>Contenido</CTableHeaderCell>
                       <CTableHeaderCell>Núcleo / Extensión</CTableHeaderCell>
                       <CTableHeaderCell>Carrera</CTableHeaderCell>
@@ -465,6 +484,11 @@ const Post = () => {
                         </CTableDataCell>
                         <CTableDataCell>
                           <strong>{post.title}</strong>
+                        </CTableDataCell>
+                        <CTableDataCell>
+                          {categoryNameById.get(String(post.category_id)) ||
+                            post.categoryName ||
+                            'Sin categoría'}
                         </CTableDataCell>
                         <CTableDataCell
                           style={{
